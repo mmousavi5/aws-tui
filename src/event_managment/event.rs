@@ -28,6 +28,8 @@ pub enum Event {
     App(AppEvent),
     /// Active tab event.
     ActiveTabKey(KeyEvent),
+    /// AWS profile event.
+    AWSProfileEvent(String),
 }
 
 /// Application events.
@@ -49,7 +51,7 @@ pub enum AppEvent {
 #[derive(Debug)]
 pub struct EventHandler {
     /// Event sender channel.
-    sender: mpsc::UnboundedSender<Event>,
+    pub sender: mpsc::UnboundedSender<Event>,
     /// Event receiver channel.
     receiver: mpsc::UnboundedReceiver<Event>,
 }

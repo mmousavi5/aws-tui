@@ -1,6 +1,8 @@
 
 pub(crate) mod paragraph;
 pub(crate) mod popup;
+pub(crate) mod aws_service_navigator;
+
 use ratatui::{
     buffer::Buffer,
     layout::Rect,

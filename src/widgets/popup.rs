@@ -7,6 +7,7 @@ use ratatui::{
 };
 use ratatui::layout::Alignment;
 use crate::widgets::WidgetExt;
+use crate::event_managment::event::{AppEvent, Event, EventHandler};
 
 pub struct PopupWidget { 
     pub text: String,
@@ -16,10 +17,11 @@ pub struct PopupWidget {
     count: usize,
     active: bool,
     visible: bool,
+    pub unbounded_channel_sender: tokio::sync::mpsc::UnboundedSender<Event>,
 }
 
 impl PopupWidget {
-    pub fn new(text: &str, active:bool) -> Self {
+    pub fn new(text: &str, active:bool, unbounded_channel_sender: tokio::sync::mpsc::UnboundedSender<Event>) -> Self {
         Self {
             text: text.to_string(),
             profile_name: None,
@@ -32,6 +34,7 @@ impl PopupWidget {
             count: 0,
             active,
             visible: true,
+            unbounded_channel_sender,  // Add this line
         }
     }
 }
@@ -97,7 +100,10 @@ impl WidgetExt for PopupWidget {
             KeyCode::Enter => {
                 // Handle profile selection
                 self.visible = false;
-                self.profile_name = Some(self.profile_list[self.selected_profile_index].clone());
+                let selected_profile = self.profile_list[self.selected_profile_index].clone();
+                self.profile_name = Some(selected_profile.clone());
+                // Send the profile event
+                self.unbounded_channel_sender.send(Event::AWSProfileEvent(selected_profile));
             }
             KeyCode::Esc => {
                 self.visible = false;

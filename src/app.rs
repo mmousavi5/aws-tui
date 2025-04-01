@@ -1,4 +1,5 @@
-use crate::event::{AppEvent, Event, EventHandler};
+use crate::event_managment::event::{AppEvent, Event, EventHandler};
+use crossterm::event;
 use ratatui::{
     DefaultTerminal,
     crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
@@ -23,16 +24,17 @@ pub struct App {
 
 impl Default for App {
     fn default() -> Self {
+        let events = EventHandler::new();
         Self {
             running: true,
             counter: 0,
-            events: EventHandler::new(),
-            active_tab: 0,
             tabs: vec![
-                Tab::new("Tab 1", "This is Tab 1."),
-                Tab::new("Tab 2", "This is Tab 2."),
-                Tab::new("Tab 3", "This is Tab 3."),
+                Tab::new("Tab 1", "This is Tab 1.", events.sender.clone()),
+                Tab::new("Tab 2", "This is Tab 2.", events.sender.clone()),
+                Tab::new("Tab 3", "This is Tab 3.", events.sender.clone()),
             ],
+            events,
+            active_tab: 0,
         }
     }
 }
@@ -62,6 +64,7 @@ impl App {
                 Event::ActiveTabKey(key_event) => {
                     self.route_event(key_event);
                 }
+                Event::AWSProfileEvent(profile) => self.set_active_tab_name(&profile),
             }
         }
         Ok(())
@@ -112,6 +115,12 @@ impl App {
     pub fn route_event(&mut self, key_event: KeyEvent) {
         if let Some(tab) = self.tabs.get_mut(self.active_tab) {
             tab.handle_input(key_event);
+        }
+    }
+
+    pub fn set_active_tab_name(&mut self, name: &str) {
+        if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+            tab.set_name(name.to_string());
         }
     }
 }
