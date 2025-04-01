@@ -1,64 +1,99 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
-    layout::Rect,
-    widgets::{Block, BorderType, Borders, Clear, Paragraph, Widget},
-    style::{Style, Color},
-    layout::Alignment,
+    layout::{Alignment, Rect},
+    style::{Color, Style},
+    widgets::{self, Block, BorderType, Borders, Clear, Paragraph, Widget},
 };
-use crate::widgets::WidgetExt;
+use crate::{services, widgets::WidgetExt};
+use crate::event_managment::event::WidgetEventType;
+use crate::event_managment::event::Event;
+
+#[derive(Clone)]
+pub enum NavigatorContent {
+    Services(Vec<WidgetEventType>),
+    Records(Vec<String>),
+}
+
+pub enum WidgetType {
+    AWSServiceNavigator,
+    AWSService,
+}
 
 pub struct AWSServiceNavigator {
-    services: Vec<String>,
+    widget_type: WidgetType,
+    content: NavigatorContent,
     selected_index: usize,
     active: bool,
     visible: bool,
+    pub unbounded_channel_sender: tokio::sync::mpsc::UnboundedSender<Event>,
 }
 
 impl AWSServiceNavigator {
-    pub fn new(active: bool) -> Self {
+    pub fn new(
+        widget_type: WidgetType,
+        active: bool,
+        unbounded_channel_sender: tokio::sync::mpsc::UnboundedSender<Event>,
+        content: NavigatorContent,
+    ) -> Self {
         Self {
-            services: vec![
-                "S3".to_string(),
-                "DynamoDB".to_string(),
-            ],
+            widget_type,
+            content,
             selected_index: 0,
             active,
             visible: true,
+            unbounded_channel_sender,
         }
     }
 
-    pub fn selected_service(&self) -> Option<&String> {
-        self.services.get(self.selected_index)
+    fn content_len(&self) -> usize {
+        match &self.content {
+            NavigatorContent::Services(services) => services.len(),
+            NavigatorContent::Records(records) => records.len(),
+        }
+    }
+
+    fn selected_item(&self) -> Option<Event> {
+        match &self.content {
+            NavigatorContent::Services(services) => services
+                .get(self.selected_index)
+                .map(|service| Event::WidgetEvent(service.clone())),
+            NavigatorContent::Records(records) => records
+                .get(self.selected_index)
+                .map(|record| Event::WidgetEvent(WidgetEventType::RecordSelected(record.clone()))),
+        }
     }
 }
 
 impl WidgetExt for AWSServiceNavigator {
     fn render(&self, area: Rect, buf: &mut Buffer) {
+        if !self.visible {
+            return;
+        }
+
         let border_style = if self.active {
             Style::default().fg(Color::Red)
         } else {
             Style::default()
         };
 
-        // Create outer block with double border
         let outer_block = Block::default()
             .title("AWS Services Panel")
             .borders(Borders::ALL)
             .border_type(BorderType::Double)
             .border_style(border_style);
 
-        // Create inner block with rounded borders
         let inner_block = Block::default()
-            .title("Available Services")
+            .title(match &self.content {
+                NavigatorContent::Services(_) => "Available Services",
+                NavigatorContent::Records(_) => "Available Records",
+            })
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .border_style(border_style);
 
-        // Render outer block
         outer_block.render(area, buf);
 
-        // Calculate inner area with padding
         let inner_area = Rect::new(
             area.x + 2,
             area.y + 2,
@@ -66,10 +101,8 @@ impl WidgetExt for AWSServiceNavigator {
             area.height - 4,
         );
 
-        // Render inner block
         inner_block.render(inner_area, buf);
 
-        // Calculate text area with additional padding
         let text_area = Rect::new(
             inner_area.x + 2,
             inner_area.y + 1,
@@ -77,21 +110,34 @@ impl WidgetExt for AWSServiceNavigator {
             inner_area.height - 2,
         );
 
-        // Create the services text with selection indicator
-        let services_text = self.services
-            .iter()
-            .enumerate()
-            .map(|(i, service)| {
-                if i == self.selected_index {
-                    format!("> {}", service)
-                } else {
-                    format!("  {}", service)
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
+        let content_text = match &self.content {
+            NavigatorContent::Services(services) => services
+                .iter()
+                .enumerate()
+                .map(|(i, service)| {
+                    if i == self.selected_index {
+                        format!("> {}", service)
+                    } else {
+                        format!("  {}", service)
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n"),
+            NavigatorContent::Records(records) => records
+                .iter()
+                .enumerate()
+                .map(|(i, record)| {
+                    if i == self.selected_index {
+                        format!("> {}", record)
+                    } else {
+                        format!("  {}", record)
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n"),
+        };
 
-        let paragraph = Paragraph::new(services_text)
+        let paragraph = Paragraph::new(content_text)
             .alignment(Alignment::Left);
 
         paragraph.render(text_area, buf);
@@ -105,8 +151,15 @@ impl WidgetExt for AWSServiceNavigator {
                 }
             }
             KeyCode::Down => {
-                if self.selected_index < self.services.len() - 1 {
+                if self.selected_index < self.content_len().saturating_sub(1) {
                     self.selected_index += 1;
+                }
+            }
+            KeyCode::Enter => {
+                if let Some(event) = self.selected_item() {
+                    if let Err(e) = self.unbounded_channel_sender.send(event) {
+                        eprintln!("Error sending event: {}", e);
+                    }
                 }
             }
             _ => {}
@@ -123,5 +176,9 @@ impl WidgetExt for AWSServiceNavigator {
 
     fn set_inactive(&mut self) {
         self.active = false;
+    }
+
+    fn set_visible(&mut self, visible: bool) {
+        self.visible = visible;
     }
 }

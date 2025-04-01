@@ -5,6 +5,7 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 use ratatui::crossterm::event:: KeyEvent;
+use std::fmt::Display;
 
 /// The frequency at which tick events are emitted.
 const TICK_FPS: f64 = 30.0;
@@ -30,8 +31,35 @@ pub enum Event {
     ActiveTabKey(KeyEvent),
     /// AWS profile event.
     AWSProfileEvent(String),
+    /// Widget event.
+    WidgetEvent(WidgetEventType),
 }
 
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum WidgetEventType {
+    /// AWS profile event.
+    S3,
+    /// Active tab event.
+    DynamoDB,
+    RecordSelected(String),  // Add this new variant
+
+}
+
+impl WidgetEventType {
+    pub const VALUES: [Self; 2] = [Self::S3, Self::DynamoDB];
+}
+
+impl std::fmt::Display for WidgetEventType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WidgetEventType::S3 => write!(f, "S3"),
+            WidgetEventType::DynamoDB => write!(f, "DynamoDB"),
+            WidgetEventType::RecordSelected(record) => write!(f, "{}", record),
+
+        }
+    }
+}
 /// Application events.
 ///
 /// You can extend this enum with your own custom events.

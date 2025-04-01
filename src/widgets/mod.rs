@@ -13,4 +13,5 @@ pub trait WidgetExt {
     fn is_visible(&self) -> bool;
     fn set_active(&mut self);
     fn set_inactive(&mut self);
+    fn set_visible(&mut self, visible: bool);
 }

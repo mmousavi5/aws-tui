@@ -15,7 +15,6 @@ pub struct PopupWidget {
     pub profile_name: Option<String>,
     pub profile_list: Vec<String>,
     pub selected_profile_index: usize,
-    count: usize,
     active: bool,
     visible: bool,
     pub unbounded_channel_sender: tokio::sync::mpsc::UnboundedSender<Event>,
@@ -30,7 +29,6 @@ impl PopupWidget {
             profile_name: None,
             profile_list: aws_profiles,
             selected_profile_index: 0,
-            count: 0,
             active,
             visible: true,
             unbounded_channel_sender,  // Add this line
@@ -40,6 +38,9 @@ impl PopupWidget {
 
 impl WidgetExt for PopupWidget {
     fn render(&self, area: Rect, buf: &mut Buffer) {
+        if !self.visible {
+            return;
+        }
         let border_style = if self.active {
             Style::default().fg(Color::Red)
         } else {
@@ -118,5 +119,8 @@ impl WidgetExt for PopupWidget {
     }
     fn set_inactive(&mut self) {
         self.active = false;
+    }
+    fn set_visible(&mut self, visible: bool) {
+        self.visible = visible;
     }
 }

@@ -5,6 +5,7 @@ use ratatui::{
     crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
 };
 use crate::components::tab::Tab;
+use crate::event_managment::event::WidgetEventType;
 
 
 /// Application.
@@ -65,6 +66,22 @@ impl App {
                     self.route_event(key_event);
                 }
                 Event::AWSProfileEvent(profile) => self.set_active_tab_name(&profile),
+                Event::WidgetEvent(event) => {
+                    // Handle widget events here
+                    match event {
+                        WidgetEventType::S3 => {
+                            self.update_sub_widgets(WidgetEventType::S3);
+                            // Handle S3 event
+                        }
+                        WidgetEventType::DynamoDB => {
+                            self.update_sub_widgets(WidgetEventType::DynamoDB);
+                            // Handle DynamoDB event
+                        }
+                        _ => {
+                            // Handle other events
+                        }
+                    }
+                }
             }
         }
         Ok(())
@@ -121,6 +138,12 @@ impl App {
     pub fn set_active_tab_name(&mut self, name: &str) {
         if let Some(tab) = self.tabs.get_mut(self.active_tab) {
             tab.set_name(name.to_string());
+        }
+    }
+
+    pub fn update_sub_widgets(&mut self, event_type: WidgetEventType) {
+        if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+            tab.update_sub_widgets(event_type);
         }
     }
 }

@@ -1,21 +1,22 @@
-use std::rc::Rc;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Rect, Margin},
     style::{Color, Style},
     text::{Line, Span},
     widgets::{Block, BorderType, Tabs, Widget},
 };
 use crate::{
-    event_managment::event::Event,
+    event_managment::event::{Event, WidgetEventType},
     widgets::{
         WidgetExt,
         paragraph::ParagraphWidget,
         popup::PopupWidget,
-        aws_service_navigator::AWSServiceNavigator,
+        aws_service_navigator::{AWSServiceNavigator, WidgetType, NavigatorContent},
     },
 };
+use std::collections::HashMap;
+use ratatui::widgets::Borders;
 
 // Constants
 const TAB_HEIGHT: u16 = 3;
@@ -23,10 +24,14 @@ const POPUP_PADDING: u16 = 5;
 
 pub struct Tab {
     pub name: String,
-    show_popup: bool,
-    widgets: Vec<Box<dyn WidgetExt>>,
-    active_widget_index: usize,
+    popup_mod: bool,
+    popup_widget: Option<Box<dyn WidgetExt>>,
+    right_widgets: Vec<Box<dyn WidgetExt>>,
+    left_widgets: Box<dyn WidgetExt>,
+    sub_widgets: HashMap<WidgetEventType, Box<dyn WidgetExt>>,
+    active_right_widget_index: usize,
     event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
+    toggle_focus: bool, // True means right panel is focused, false means left panel is focused
 }
 
 impl Tab {
@@ -37,14 +42,21 @@ impl Tab {
     ) -> Self {
         Self {
             name: name.to_string(),
-            show_popup: true,
-            widgets: vec![
-                Box::new(AWSServiceNavigator::new(false)),
+            popup_mod: true,
+            left_widgets:Box::new(AWSServiceNavigator::new(
+                WidgetType::AWSServiceNavigator,
+                false,
+                event_sender.clone(),
+                NavigatorContent::Services(WidgetEventType::VALUES.to_vec()),
+                )),
+            popup_widget: Some(Box::new(PopupWidget::new(content, true, event_sender.clone()))),
+            right_widgets: vec![
                 Box::new(ParagraphWidget::new(content, false)),
-                Box::new(PopupWidget::new(content, true, event_sender.clone())),
             ],
-            active_widget_index: 2,
+            sub_widgets: HashMap::new(),  // Initialize empty HashMap
+            active_right_widget_index: 0,
             event_sender,
+            toggle_focus: false, // Default to left panel focused
         }
     }
 
@@ -55,18 +67,28 @@ impl Tab {
 
     pub fn set_name(&mut self, name: String) {
         self.name = name;
-    }
-
-    pub fn toggle_popup(&mut self) {
-        self.show_popup = !self.show_popup;
+        self.popup_mod = false;
     }
 
     // Public methods
     pub fn handle_input(&mut self, event: KeyEvent) {
-        match event.code {
-            KeyCode::Char('t') => self.cycle_active_widget_forward(),
-            KeyCode::BackTab => self.cycle_active_widget_backward(),
-            _ => self.handle_widget_input(event),
+        if self.popup_mod {
+            if let Some(popup) = self.popup_widget.as_mut() {
+                popup.handle_input(event);
+            }
+        } else {
+            match event.code {
+                KeyCode::Char('t') => {
+                    self.toggle_focus = !self.toggle_focus;
+                }
+                _ => {
+                    if self.toggle_focus {
+                        self.left_widgets.handle_input(event);
+                    } else {
+                        self.right_widgets[self.active_right_widget_index].handle_input(event);
+                    }
+                }
+            }
         }
     }
 
@@ -79,26 +101,32 @@ impl Tab {
 
     // Private methods
     fn cycle_active_widget_forward(&mut self) {
-        self.widgets[self.active_widget_index].set_inactive();
-        self.active_widget_index = (self.active_widget_index + 1) % self.widgets.len();
-        self.widgets[self.active_widget_index].set_active();
-    }
-
-    fn cycle_active_widget_backward(&mut self) {
-        self.widgets[self.active_widget_index].set_inactive();
-        self.active_widget_index = if self.active_widget_index == 0 {
-            self.widgets.len() - 1
+        self.toggle_focus = !self.toggle_focus;
+        if self.toggle_focus {
+            self.left_widgets.set_active();
         } else {
-            self.active_widget_index - 1
-        };
-        self.widgets[self.active_widget_index].set_active();
+            self.left_widgets.set_inactive();
+        }
+        // self.widgets[self.active_widget_index].set_inactive();
+        // let mut next_index = (self.active_widget_index + 1) % self.widgets.len();
+
+        // while !self.widgets[next_index].is_visible() {
+        //     next_index = (next_index + 1) % self.widgets.len();
+        //     if next_index == self.active_widget_index {
+        //         // If we loop back to the starting index, break to avoid infinite loop
+        //         break;
+        //     }
+        // }
+
+        // self.active_widget_index = next_index;
+        // self.widgets[self.active_widget_index].set_active();
     }
 
     fn handle_widget_input(&mut self, event: KeyEvent) {
-        if let Some(active_widget) = self.widgets.get_mut(self.active_widget_index) {
-            if active_widget.is_visible() {
-                active_widget.handle_input(event);
-            }
+        if self.toggle_focus {
+            self.left_widgets.handle_input(event);
+        } else {
+            self.right_widgets[self.active_right_widget_index].handle_input(event);
         }
     }
 
@@ -143,16 +171,42 @@ impl Tab {
     fn render_widgets(&self, area: Rect, buf: &mut Buffer) {
         let popup_area = self.calculate_popup_area(area);
         let layout: Vec<Rect> = self.create_layout(area);
-
-        for (index, widget) in self.widgets.iter().enumerate() {
+    
+        // Create blocks with borders for each layout section
+        let left_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Plain)
+            .border_style(Style::default().fg(if self.toggle_focus { Color::Red } else { Color::DarkGray }));
+    
+        let right_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Plain)
+            .border_style(Style::default().fg(if !self.toggle_focus { Color::Red } else { Color::DarkGray }));
+    
+        // Calculate inner areas for the actual widgets
+        let left_inner = layout[0].inner(Margin::new(1, 1));
+        let right_inner = layout[1].inner(Margin::new(1, 1));
+    
+        // First render the base widgets
+        left_block.render(layout[0], buf);
+        right_block.render(layout[1], buf);
+        self.left_widgets.render(left_inner, buf);
+        
+        for widget in self.right_widgets.iter() {
+            widget.render(right_inner, buf);
+        }
+        
+        for (_, widget) in self.sub_widgets.iter() {
             if widget.is_visible() {
-                match index {
-                    0 => widget.render(layout[0], buf),  // AWS Navigator
-                    1 => widget.render(layout[1], buf),  // Main content
-                    2 if self.show_popup => widget.render(popup_area, buf), // Popup
-                    _ => {}
-                }
+                widget.render(right_inner, buf);
             }
+        }
+    
+        // Render popup last so it appears on top
+        if self.popup_mod {
+            self.popup_widget.as_ref().map(|popup| {
+                popup.render(popup_area, buf);
+            });
         }
     }
 
@@ -163,5 +217,47 @@ impl Tab {
             base_area.width - 2 * POPUP_PADDING,
             base_area.height - 2 * POPUP_PADDING
         )
+    }
+
+    pub fn update_sub_widgets(&mut self, event: WidgetEventType) {
+        for (_, widget) in self.sub_widgets.iter_mut() {
+            widget.set_inactive();
+            widget.set_visible(false);
+        }
+        
+        if let Some(widget) = self.sub_widgets.get_mut(&event) {
+            widget.set_active();
+            widget.set_visible(true);
+        } else {
+            let new_widget = match event {
+                WidgetEventType::S3 => Box::new(AWSServiceNavigator::new(
+                    WidgetType::AWSService,
+                    false,
+                    self.event_sender.clone(),
+                    NavigatorContent::Records(vec![
+                        "s3://my-bucket/images/photo1.jpg".to_string(),
+                        "s3://my-bucket/documents/report.pdf".to_string(),
+                        "s3://my-bucket/data/backup.zip".to_string(),
+                        "s3://my-bucket/config/settings.json".to_string(),
+                        "s3://my-bucket/logs/app.log".to_string(),
+                    ])
+                )),
+                WidgetEventType::DynamoDB => Box::new(AWSServiceNavigator::new(
+                    WidgetType::AWSService,
+                    false,
+                    self.event_sender.clone(),
+                    NavigatorContent::Records(vec![
+                        "Users | Partition Key: user_id | Items: 1500".to_string(),
+                        "Orders | Partition Key: order_id | Items: 2300".to_string(),
+                        "Products | Partition Key: product_id | Items: 850".to_string(),
+                        "Customers | Partition Key: customer_id | Items: 1200".to_string(),
+                        "Inventory | Partition Key: sku | Items: 750".to_string(),
+                    ])
+                )),
+                WidgetEventType::RecordSelected(_) => return, // Skip creating new widget for RecordSelected events
+            };
+            self.right_widgets[0].set_visible(false);
+            self.sub_widgets.insert(event, new_widget);
+        }
     }
 }

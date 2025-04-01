@@ -29,6 +29,9 @@ impl ParagraphWidget {
 }
 impl WidgetExt for ParagraphWidget {
     fn render(&self, area: Rect, buf: &mut Buffer) {
+        if !self.visible {
+            return;
+        }
         let border_style = if self.active {
             Style::default().fg(Color::Red)
         } else {
@@ -71,5 +74,8 @@ impl WidgetExt for ParagraphWidget {
     }
     fn set_inactive(&mut self) {
         self.active = false;
+    }
+    fn set_visible(&mut self, visible: bool) {
+        self.visible = visible;
     }
 }
