@@ -4,6 +4,8 @@ use ratatui::crossterm::event::Event as CrosstermEvent;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
+use ratatui::crossterm::event:: KeyEvent;
+
 /// The frequency at which tick events are emitted.
 const TICK_FPS: f64 = 30.0;
 
@@ -24,6 +26,8 @@ pub enum Event {
     ///
     /// Use this event to emit custom events that are specific to your application.
     App(AppEvent),
+    /// Active tab event.
+    ActiveTabKey(KeyEvent),
 }
 
 /// Application events.
@@ -79,10 +83,10 @@ impl EventHandler {
     ///
     /// This is useful for sending events to the event handler which will be processed by the next
     /// iteration of the application's event loop.
-    pub fn send(&mut self, app_event: AppEvent) {
+    pub fn send(&mut self, event: Event) {
         // Ignore the result as the reciever cannot be dropped while this struct still has a
         // reference to it
-        let _ = self.sender.send(Event::App(app_event));
+        let _ = self.sender.send(event);
     }
 }
 

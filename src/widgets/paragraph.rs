@@ -3,6 +3,7 @@ use ratatui::{
     buffer::Buffer,
     layout::Rect,
     widgets::{Block, BorderType, Paragraph, Widget},
+    style::{Style, Color},
 };
 use ratatui::layout::Alignment;
 use ratatui::widgets::{Borders, Wrap};
@@ -10,41 +11,65 @@ use crate::widgets::WidgetExt;
 
 pub struct ParagraphWidget {
     pub text:  String,
-    pub show_popup: bool,
     pub selected_profile_index: usize,
+    count: usize,
+    active: bool,
+    visible: bool,
 }
 impl ParagraphWidget {
-    pub fn new(text: &str) -> Self {
+    pub fn new(text: &str, active:bool) -> Self {
         Self {
             text: text.to_string(),
-            show_popup: true,
             selected_profile_index: 0,
+            count: 0,
+            active,
+            visible: true,
         }
     }
 }
 impl WidgetExt for ParagraphWidget {
     fn render(&self, area: Rect, buf: &mut Buffer) {
+        let border_style = if self.active {
+            Style::default().fg(Color::Red)
+        } else {
+            Style::default()
+        };
+
         let block = Block::default()
             .title("Paragraph")
             .border_type(BorderType::Rounded)
-            .borders(Borders::ALL);
+            .borders(Borders::ALL)
+            .border_style(border_style);
 
-        let paragraph = Paragraph::new(self.text.as_str())
+        let paragraph_text = self.text.clone() + &format!("\nCount: {}", self.count);
+        let paragraph = Paragraph::new(paragraph_text)
             .block(block)
             .alignment(Alignment::Left)
             .wrap(Wrap { trim: true });
 
         paragraph.render(area, buf);
     }
-    
+
     fn handle_input(&mut self, key_event: KeyEvent) {
         match key_event.code {
             KeyCode::Up => {
-                if self.selected_profile_index > 0 {
-                    self.selected_profile_index -= 1;
+                self.count += 1;
+            }
+            KeyCode::Down => {
+                if self.count > 0 {
+                    self.count -= 1;
                 }
             }
             _ => {}
         }
+    }
+    fn is_visible(&self) -> bool {
+        self.visible
+    }
+    fn set_active(&mut self) {
+        self.active = true;
+    }
+    fn set_inactive(&mut self) {
+        self.active = false;
     }
 }

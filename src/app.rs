@@ -29,7 +29,7 @@ impl Default for App {
             events: EventHandler::new(),
             active_tab: 0,
             tabs: vec![
-                Tab::new("Tab 1", "This is Tab 1.\nCounter: 0"),
+                Tab::new("Tab 1", "This is Tab 1."),
                 Tab::new("Tab 2", "This is Tab 2."),
                 Tab::new("Tab 3", "This is Tab 3."),
             ],
@@ -59,6 +59,9 @@ impl App {
                     AppEvent::NextTab => self.next_tab(),
                     AppEvent::Quit => self.quit(),
                 },
+                Event::ActiveTabKey(key_event) => {
+                    self.route_event(key_event);
+                }
             }
         }
         Ok(())
@@ -67,15 +70,15 @@ impl App {
     /// Handles the key events and updates the state of [`App`].
     pub fn handle_key_events(&mut self, key_event: KeyEvent) -> color_eyre::Result<()> {
         match key_event.code {
-            KeyCode::Esc | KeyCode::Char('q') => self.events.send(AppEvent::Quit),
+            KeyCode::Esc | KeyCode::Char('q') => self.events.send(Event::App(AppEvent::Quit)),
             KeyCode::Char('c' | 'C') if key_event.modifiers == KeyModifiers::CONTROL => {
-                self.events.send(AppEvent::Quit)
+                self.events.send(Event::App(AppEvent::Quit))
             }
-            KeyCode::Right => self.events.send(AppEvent::Increment),
-            KeyCode::Left => self.events.send(AppEvent::Decrement),
-            KeyCode::Tab => self.events.send(AppEvent::NextTab),
+            KeyCode::Right => self.events.send(Event::App(AppEvent::Increment)),
+            KeyCode::Left => self.events.send(Event::App(AppEvent::Decrement)),
+            KeyCode::Tab => self.events.send(Event::App(AppEvent::NextTab)),
             // Other handlers you could add here.
-            _ => {}
+            _ => {self.events.send(Event::ActiveTabKey(key_event));},
         }
         Ok(())
     }
@@ -103,5 +106,12 @@ impl App {
     pub fn next_tab(&mut self) {
         // self.tabs[self.active_tab].show_popup = false;
         self.active_tab = (self.active_tab + 1) % self.tabs.len();
+    }
+
+    /// Route the event to the active tab.
+    pub fn route_event(&mut self, key_event: KeyEvent) {
+        if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+            tab.handle_input(key_event);
+        }
     }
 }
