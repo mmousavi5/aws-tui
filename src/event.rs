@@ -35,6 +35,8 @@ pub enum AppEvent {
     Increment,
     /// Decrement the counter.
     Decrement,
+    /// Switch to the next tab.
+    NextTab,
     /// Quit the application.
     Quit,
 }

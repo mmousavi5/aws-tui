@@ -3,9 +3,10 @@ use ratatui::{
     DefaultTerminal,
     crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
 };
+use crate::components::tab::Tab;
+
 
 /// Application.
-#[derive(Debug)]
 pub struct App {
     /// Is the application running?
     pub running: bool,
@@ -13,6 +14,11 @@ pub struct App {
     pub counter: u8,
     /// Event handler.
     pub events: EventHandler,
+    ///
+    pub active_tab: usize, // Track the active tab
+    ///
+    pub tabs: Vec<Tab>,
+
 }
 
 impl Default for App {
@@ -21,6 +27,12 @@ impl Default for App {
             running: true,
             counter: 0,
             events: EventHandler::new(),
+            active_tab: 0,
+            tabs: vec![
+                Tab::new("Tab 1", "This is Tab 1.\nCounter: 0"),
+                Tab::new("Tab 2", "This is Tab 2."),
+                Tab::new("Tab 3", "This is Tab 3."),
+            ],
         }
     }
 }
@@ -44,6 +56,7 @@ impl App {
                 Event::App(app_event) => match app_event {
                     AppEvent::Increment => self.increment_counter(),
                     AppEvent::Decrement => self.decrement_counter(),
+                    AppEvent::NextTab => self.next_tab(),
                     AppEvent::Quit => self.quit(),
                 },
             }
@@ -60,6 +73,7 @@ impl App {
             }
             KeyCode::Right => self.events.send(AppEvent::Increment),
             KeyCode::Left => self.events.send(AppEvent::Decrement),
+            KeyCode::Tab => self.events.send(AppEvent::NextTab),
             // Other handlers you could add here.
             _ => {}
         }
@@ -83,5 +97,11 @@ impl App {
 
     pub fn decrement_counter(&mut self) {
         self.counter = self.counter.saturating_sub(1);
+    }
+
+    /// Switch to the next tab.
+    pub fn next_tab(&mut self) {
+        // self.tabs[self.active_tab].show_popup = false;
+        self.active_tab = (self.active_tab + 1) % self.tabs.len();
     }
 }
