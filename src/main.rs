@@ -5,6 +5,7 @@ pub mod event_managment;
 pub mod ui;
 pub mod components;
 pub mod widgets;
+pub mod services;
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {

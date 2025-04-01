@@ -8,6 +8,7 @@ use ratatui::{
 use ratatui::layout::Alignment;
 use crate::widgets::WidgetExt;
 use crate::event_managment::event::{AppEvent, Event, EventHandler};
+use crate::services::read_config;
 
 pub struct PopupWidget { 
     pub text: String,
@@ -22,14 +23,12 @@ pub struct PopupWidget {
 
 impl PopupWidget {
     pub fn new(text: &str, active:bool, unbounded_channel_sender: tokio::sync::mpsc::UnboundedSender<Event>) -> Self {
+        let aws_profiles = read_config::get_aws_profiles()
+            .unwrap_or_else(|_| vec!["No profiles found".to_string()]);
         Self {
             text: text.to_string(),
             profile_name: None,
-            profile_list: vec![
-                "Profile 1".to_string(), 
-                "Profile 2".to_string(), 
-                "Profile 3".to_string()
-            ],
+            profile_list: aws_profiles,
             selected_profile_index: 0,
             count: 0,
             active,
