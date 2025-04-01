@@ -21,17 +21,6 @@ impl ParagraphWidget {
             selected_profile_index: 0,
         }
     }
-
-    pub fn handle_input(&mut self, key_event: KeyEvent) {
-        match key_event.code {
-            KeyCode::Up => {
-                if self.selected_profile_index > 0 {
-                    self.selected_profile_index -= 1;
-                }
-            }
-            _ => {}
-        }
-    }
 }
 impl WidgetExt for ParagraphWidget {
     fn render(&self, area: Rect, buf: &mut Buffer) {
@@ -46,5 +35,16 @@ impl WidgetExt for ParagraphWidget {
             .wrap(Wrap { trim: true });
 
         paragraph.render(area, buf);
+    }
+    
+    fn handle_input(&mut self, key_event: KeyEvent) {
+        match key_event.code {
+            KeyCode::Up => {
+                if self.selected_profile_index > 0 {
+                    self.selected_profile_index -= 1;
+                }
+            }
+            _ => {}
+        }
     }
 }

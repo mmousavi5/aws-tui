@@ -3,7 +3,7 @@ use ratatui::{
     buffer::Buffer,
     layout::Rect,
     style::{Color, Style},
-    widgets::{Block, BorderType, Paragraph, Widget},
+    widgets::{Block, BorderType, Widget},
 };
 use ratatui::layout::Alignment;
 use ratatui::text::{Line, Span};
