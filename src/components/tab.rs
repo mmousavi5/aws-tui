@@ -241,7 +241,7 @@ impl Tab {
             },
             WidgetEventType::RecordSelected(_) => return Ok(()),
         }
-        
+        self.right_widgets.remove(&WidgetType::Default);
         Ok(())
     }
 }
