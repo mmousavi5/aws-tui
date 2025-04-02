@@ -70,11 +70,11 @@ impl App {
                     // Handle widget events here
                     match event {
                         WidgetEventType::S3 => {
-                            self.update_sub_widgets(WidgetEventType::S3);
+                            self.update_sub_widgets(WidgetEventType::S3).await;
                             // Handle S3 event
                         }
                         WidgetEventType::DynamoDB => {
-                            self.update_sub_widgets(WidgetEventType::DynamoDB);
+                            self.update_sub_widgets(WidgetEventType::DynamoDB).await;
                             // Handle DynamoDB event
                         }
                         _ => {
@@ -141,9 +141,13 @@ impl App {
         }
     }
 
-    pub fn update_sub_widgets(&mut self, event_type: WidgetEventType) {
+    pub async fn update_sub_widgets(&mut self, event_type: WidgetEventType) {
         if let Some(tab) = self.tabs.get_mut(self.active_tab) {
-            tab.update_sub_widgets(event_type);
+            if let Err(e) = tab.update_sub_widgets(event_type).await {
+                eprintln!("Error updating sub widgets: {}", e);
+            }
+        } else {
+            panic!("No active tab found");
         }
     }
 }

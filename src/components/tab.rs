@@ -17,6 +17,8 @@ use crate::{
 };
 use std::collections::HashMap;
 use ratatui::widgets::Borders;
+use crate::services::aws::{TabClients, TabClientsError};
+
 
 // Constants
 const TAB_HEIGHT: u16 = 3;
@@ -28,10 +30,10 @@ pub struct Tab {
     popup_widget: Option<Box<dyn WidgetExt>>,
     right_widgets: Vec<Box<dyn WidgetExt>>,
     left_widgets: Box<dyn WidgetExt>,
-    sub_widgets: HashMap<WidgetEventType, Box<dyn WidgetExt>>,
     active_right_widget_index: usize,
     event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
     toggle_focus: bool, // True means right panel is focused, false means left panel is focused
+    aws_clients: TabClients,
 }
 
 impl Tab {
@@ -53,10 +55,11 @@ impl Tab {
             right_widgets: vec![
                 Box::new(ParagraphWidget::new(content, false)),
             ],
-            sub_widgets: HashMap::new(),  // Initialize empty HashMap
             active_right_widget_index: 0,
             event_sender,
             toggle_focus: false, // Default to left panel focused
+            aws_clients: TabClients::new(String::new(), String::from("eu-west-1")),
+
         }
     }
 
@@ -68,6 +71,7 @@ impl Tab {
     pub fn set_name(&mut self, name: String) {
         self.name = name;
         self.popup_mod = false;
+        self.aws_clients.set_profile(self.name.clone());
     }
 
     // Public methods
@@ -97,37 +101,6 @@ impl Tab {
         let content_area = self.get_content_area(area);
         
         self.render_widgets(content_area, buf);
-    }
-
-    // Private methods
-    fn cycle_active_widget_forward(&mut self) {
-        self.toggle_focus = !self.toggle_focus;
-        if self.toggle_focus {
-            self.left_widgets.set_active();
-        } else {
-            self.left_widgets.set_inactive();
-        }
-        // self.widgets[self.active_widget_index].set_inactive();
-        // let mut next_index = (self.active_widget_index + 1) % self.widgets.len();
-
-        // while !self.widgets[next_index].is_visible() {
-        //     next_index = (next_index + 1) % self.widgets.len();
-        //     if next_index == self.active_widget_index {
-        //         // If we loop back to the starting index, break to avoid infinite loop
-        //         break;
-        //     }
-        // }
-
-        // self.active_widget_index = next_index;
-        // self.widgets[self.active_widget_index].set_active();
-    }
-
-    fn handle_widget_input(&mut self, event: KeyEvent) {
-        if self.toggle_focus {
-            self.left_widgets.handle_input(event);
-        } else {
-            self.right_widgets[self.active_right_widget_index].handle_input(event);
-        }
     }
 
     fn render_tab_bar(&self, area: Rect, buf: &mut Buffer, tab_titles: Vec<String>, active_tab: usize) {
@@ -196,12 +169,6 @@ impl Tab {
             widget.render(right_inner, buf);
         }
         
-        for (_, widget) in self.sub_widgets.iter() {
-            if widget.is_visible() {
-                widget.render(right_inner, buf);
-            }
-        }
-    
         // Render popup last so it appears on top
         if self.popup_mod {
             self.popup_widget.as_ref().map(|popup| {
@@ -219,45 +186,47 @@ impl Tab {
         )
     }
 
-    pub fn update_sub_widgets(&mut self, event: WidgetEventType) {
-        for (_, widget) in self.sub_widgets.iter_mut() {
+    pub async fn update_sub_widgets(&mut self, event: WidgetEventType) -> Result<(), TabClientsError> {
+        // First deactivate and hide all existing right widgets
+        for widget in self.right_widgets.iter_mut() {
             widget.set_inactive();
             widget.set_visible(false);
         }
         
-        if let Some(widget) = self.sub_widgets.get_mut(&event) {
-            widget.set_active();
-            widget.set_visible(true);
-        } else {
-            let new_widget = match event {
-                WidgetEventType::S3 => Box::new(AWSServiceNavigator::new(
+        // Create new widget based on event type
+        let new_widget: Box<dyn WidgetExt> = match event {
+            WidgetEventType::S3 => {
+                let buckets = match self.aws_clients.list_s3_buckets().await {
+                    Ok(buckets) if !buckets.is_empty() => buckets,
+                    Ok(_) => vec!["No buckets found".to_string()],
+                    Err(e) => vec![format!("Error listing buckets: {}", e)],
+                };
+                Box::new(AWSServiceNavigator::new(
                     WidgetType::AWSService,
-                    false,
+                    true,  // Set active since it's the new widget
                     self.event_sender.clone(),
-                    NavigatorContent::Records(vec![
-                        "s3://my-bucket/images/photo1.jpg".to_string(),
-                        "s3://my-bucket/documents/report.pdf".to_string(),
-                        "s3://my-bucket/data/backup.zip".to_string(),
-                        "s3://my-bucket/config/settings.json".to_string(),
-                        "s3://my-bucket/logs/app.log".to_string(),
-                    ])
-                )),
-                WidgetEventType::DynamoDB => Box::new(AWSServiceNavigator::new(
+                    NavigatorContent::Records(buckets)
+                ))
+            },
+            WidgetEventType::DynamoDB => {
+                let tables = match self.aws_clients.list_dynamodb_tables().await {
+                    Ok(tables) if !tables.is_empty() => tables,
+                    Ok(_) => vec!["No tables found".to_string()],
+                    Err(e) => vec![format!("Error listing tables: {}", e)],
+                };
+                Box::new(AWSServiceNavigator::new(
                     WidgetType::AWSService,
-                    false,
+                    true,  // Set active since it's the new widget
                     self.event_sender.clone(),
-                    NavigatorContent::Records(vec![
-                        "Users | Partition Key: user_id | Items: 1500".to_string(),
-                        "Orders | Partition Key: order_id | Items: 2300".to_string(),
-                        "Products | Partition Key: product_id | Items: 850".to_string(),
-                        "Customers | Partition Key: customer_id | Items: 1200".to_string(),
-                        "Inventory | Partition Key: sku | Items: 750".to_string(),
-                    ])
-                )),
-                WidgetEventType::RecordSelected(_) => return, // Skip creating new widget for RecordSelected events
-            };
-            self.right_widgets[0].set_visible(false);
-            self.sub_widgets.insert(event, new_widget);
-        }
+                    NavigatorContent::Records(tables)
+                ))
+            },
+            WidgetEventType::RecordSelected(_) => return Ok(()), // Skip creating new widget
+        };
+    
+        // Add the new widget to right_widgets
+        self.right_widgets.push(new_widget);
+        
+        Ok(())
     }
 }

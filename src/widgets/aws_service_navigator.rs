@@ -63,6 +63,10 @@ impl AWSServiceNavigator {
                 .map(|record| Event::WidgetEvent(WidgetEventType::RecordSelected(record.clone()))),
         }
     }
+
+    fn set_content(&mut self, content: NavigatorContent) {
+        self.content = content;
+    }
 }
 
 impl WidgetExt for AWSServiceNavigator {
