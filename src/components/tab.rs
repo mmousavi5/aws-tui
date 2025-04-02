@@ -19,7 +19,6 @@ use std::collections::HashMap;
 use ratatui::widgets::Borders;
 use crate::services::aws::{TabClients, TabClientsError};
 
-
 // Constants
 const TAB_HEIGHT: u16 = 3;
 const POPUP_PADDING: u16 = 5;
@@ -28,11 +27,11 @@ pub struct Tab {
     pub name: String,
     popup_mod: bool,
     popup_widget: Option<Box<dyn WidgetExt>>,
-    right_widgets: Vec<Box<dyn WidgetExt>>,
+    right_widgets: HashMap<WidgetType, Box<dyn WidgetExt>>,
     left_widgets: Box<dyn WidgetExt>,
-    active_right_widget_index: usize,
+    active_right_widget: WidgetType,
     event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
-    toggle_focus: bool, // True means right panel is focused, false means left panel is focused
+    toggle_focus: bool,
     aws_clients: TabClients,
 }
 
@@ -40,26 +39,29 @@ impl Tab {
     pub fn new(
         name: &str, 
         content: &str, 
-        event_sender: tokio::sync::mpsc::UnboundedSender<Event>
+        event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
     ) -> Self {
+        let mut right_widgets:HashMap<WidgetType, Box<dyn WidgetExt>>  = HashMap::new();
+        right_widgets.insert(
+            WidgetType::Default,
+            Box::new(ParagraphWidget::new(content, false))
+        );
+
         Self {
             name: name.to_string(),
             popup_mod: true,
-            left_widgets:Box::new(AWSServiceNavigator::new(
+            left_widgets: Box::new(AWSServiceNavigator::new(
                 WidgetType::AWSServiceNavigator,
                 false,
                 event_sender.clone(),
                 NavigatorContent::Services(WidgetEventType::VALUES.to_vec()),
-                )),
+            )),
             popup_widget: Some(Box::new(PopupWidget::new(content, true, event_sender.clone()))),
-            right_widgets: vec![
-                Box::new(ParagraphWidget::new(content, false)),
-            ],
-            active_right_widget_index: 0,
+            right_widgets,
+            active_right_widget: WidgetType::Default,
             event_sender,
-            toggle_focus: false, // Default to left panel focused
+            toggle_focus: false,
             aws_clients: TabClients::new(String::new(), String::from("eu-west-1")),
-
         }
     }
 
@@ -88,8 +90,8 @@ impl Tab {
                 _ => {
                     if self.toggle_focus {
                         self.left_widgets.handle_input(event);
-                    } else {
-                        self.right_widgets[self.active_right_widget_index].handle_input(event);
+                    } else if let Some(widget) = self.right_widgets.get_mut(&self.active_right_widget) {
+                        widget.handle_input(event);
                     }
                 }
             }
@@ -141,11 +143,11 @@ impl Tab {
             .to_vec()
     }
 
+    // Update the render_widgets method
     fn render_widgets(&self, area: Rect, buf: &mut Buffer) {
         let popup_area = self.calculate_popup_area(area);
         let layout: Vec<Rect> = self.create_layout(area);
     
-        // Create blocks with borders for each layout section
         let left_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Plain)
@@ -156,20 +158,17 @@ impl Tab {
             .border_type(BorderType::Plain)
             .border_style(Style::default().fg(if !self.toggle_focus { Color::Red } else { Color::DarkGray }));
     
-        // Calculate inner areas for the actual widgets
         let left_inner = layout[0].inner(Margin::new(1, 1));
         let right_inner = layout[1].inner(Margin::new(1, 1));
     
-        // First render the base widgets
         left_block.render(layout[0], buf);
         right_block.render(layout[1], buf);
         self.left_widgets.render(left_inner, buf);
         
-        for widget in self.right_widgets.iter() {
+        if let Some(widget) = self.right_widgets.get(&self.active_right_widget) {
             widget.render(right_inner, buf);
         }
         
-        // Render popup last so it appears on top
         if self.popup_mod {
             self.popup_widget.as_ref().map(|popup| {
                 popup.render(popup_area, buf);
@@ -187,26 +186,32 @@ impl Tab {
     }
 
     pub async fn update_sub_widgets(&mut self, event: WidgetEventType) -> Result<(), TabClientsError> {
-        // First deactivate and hide all existing right widgets
-        for widget in self.right_widgets.iter_mut() {
-            widget.set_inactive();
-            widget.set_visible(false);
-        }
-        
-        // Create new widget based on event type
-        let new_widget: Box<dyn WidgetExt> = match event {
+        match event {
             WidgetEventType::S3 => {
                 let buckets = match self.aws_clients.list_s3_buckets().await {
                     Ok(buckets) if !buckets.is_empty() => buckets,
                     Ok(_) => vec!["No buckets found".to_string()],
                     Err(e) => vec![format!("Error listing buckets: {}", e)],
                 };
-                Box::new(AWSServiceNavigator::new(
-                    WidgetType::AWSService,
-                    true,  // Set active since it's the new widget
-                    self.event_sender.clone(),
-                    NavigatorContent::Records(buckets)
-                ))
+    
+                if let Some(existing_widget) = self.right_widgets.get_mut(&WidgetType::S3) {
+                    // Cast to AWSServiceNavigator and update content
+                    if let Some(navigator) = existing_widget.as_any_mut().downcast_mut::<AWSServiceNavigator>() {
+                        navigator.set_content(NavigatorContent::Records(buckets));
+                    }
+                } else {
+                    // Create new widget if it doesn't exist
+                    self.right_widgets.insert(
+                        WidgetType::S3,
+                        Box::new(AWSServiceNavigator::new(
+                            WidgetType::AWSService,
+                            true,
+                            self.event_sender.clone(),
+                            NavigatorContent::Records(buckets)
+                        ))
+                    );
+                }
+                self.active_right_widget = WidgetType::S3;
             },
             WidgetEventType::DynamoDB => {
                 let tables = match self.aws_clients.list_dynamodb_tables().await {
@@ -214,18 +219,28 @@ impl Tab {
                     Ok(_) => vec!["No tables found".to_string()],
                     Err(e) => vec![format!("Error listing tables: {}", e)],
                 };
-                Box::new(AWSServiceNavigator::new(
-                    WidgetType::AWSService,
-                    true,  // Set active since it's the new widget
-                    self.event_sender.clone(),
-                    NavigatorContent::Records(tables)
-                ))
-            },
-            WidgetEventType::RecordSelected(_) => return Ok(()), // Skip creating new widget
-        };
     
-        // Add the new widget to right_widgets
-        self.right_widgets.push(new_widget);
+                if let Some(existing_widget) = self.right_widgets.get_mut(&WidgetType::DynamoDB) {
+                    // Cast to AWSServiceNavigator and update content
+                    if let Some(navigator) = existing_widget.as_any_mut().downcast_mut::<AWSServiceNavigator>() {
+                        navigator.set_content(NavigatorContent::Records(tables));
+                    }
+                } else {
+                    // Create new widget if it doesn't exist
+                    self.right_widgets.insert(
+                        WidgetType::DynamoDB,
+                        Box::new(AWSServiceNavigator::new(
+                            WidgetType::AWSService,
+                            true,
+                            self.event_sender.clone(),
+                            NavigatorContent::Records(tables)
+                        ))
+                    );
+                }
+                self.active_right_widget = WidgetType::DynamoDB;
+            },
+            WidgetEventType::RecordSelected(_) => return Ok(()),
+        }
         
         Ok(())
     }

@@ -8,6 +8,7 @@ use ratatui::{
 use ratatui::layout::Alignment;
 use ratatui::widgets::{Borders, Wrap};
 use crate::widgets::WidgetExt;
+use std::any::Any;
 
 pub struct ParagraphWidget {
     pub text:  String,
@@ -77,5 +78,8 @@ impl WidgetExt for ParagraphWidget {
     }
     fn set_visible(&mut self, visible: bool) {
         self.visible = visible;
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }

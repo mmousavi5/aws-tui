@@ -12,6 +12,7 @@ use crate::{
     event_managment::event::{AppEvent, Event, EventHandler},
     services::read_config,
 };
+use std::any::Any;
 
 const POPUP_MARGIN: u16 = 5;
 const MIN_POPUP_WIDTH: u16 = 20;
@@ -161,5 +162,8 @@ impl WidgetExt for PopupWidget {
 
     fn set_visible(&mut self, visible: bool) {
         self.visible = visible;
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }

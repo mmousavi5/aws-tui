@@ -71,6 +71,10 @@ pub enum AppEvent {
     Decrement,
     /// Switch to the next tab.
     NextTab,
+    /// Create a new tab.
+    CreateTab,
+    /// Close the current tab.
+    CloseTab,
     /// Quit the application.
     Quit,
 }

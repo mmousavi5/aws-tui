@@ -8,6 +8,7 @@ use ratatui::{
 use crate::{services, widgets::WidgetExt};
 use crate::event_managment::event::WidgetEventType;
 use crate::event_managment::event::Event;
+use std::any::Any;
 
 #[derive(Clone)]
 pub enum NavigatorContent {
@@ -15,9 +16,13 @@ pub enum NavigatorContent {
     Records(Vec<String>),
 }
 
+#[derive(Hash, Eq, PartialEq, Clone)]
 pub enum WidgetType {
+    Default,
     AWSServiceNavigator,
     AWSService,
+    S3,
+    DynamoDB,
 }
 
 pub struct AWSServiceNavigator {
@@ -64,7 +69,7 @@ impl AWSServiceNavigator {
         }
     }
 
-    fn set_content(&mut self, content: NavigatorContent) {
+    pub fn set_content(&mut self, content: NavigatorContent) {
         self.content = content;
     }
 }
@@ -184,5 +189,8 @@ impl WidgetExt for AWSServiceNavigator {
 
     fn set_visible(&mut self, visible: bool) {
         self.visible = visible;
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }

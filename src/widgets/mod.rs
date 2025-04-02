@@ -2,6 +2,7 @@
 pub(crate) mod paragraph;
 pub(crate) mod popup;
 pub(crate) mod aws_service_navigator;
+use std::any::Any;
 
 use ratatui::{
     buffer::Buffer,
@@ -14,4 +15,5 @@ pub trait WidgetExt {
     fn set_active(&mut self);
     fn set_inactive(&mut self);
     fn set_visible(&mut self, visible: bool);
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }

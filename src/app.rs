@@ -60,6 +60,15 @@ impl App {
                     AppEvent::Increment => self.increment_counter(),
                     AppEvent::Decrement => self.decrement_counter(),
                     AppEvent::NextTab => self.next_tab(),
+                    AppEvent::CreateTab => {
+                        self.tabs.push(Tab::new("New Tab", "This is a new tab.", self.events.sender.clone()));
+                    }
+                    AppEvent::CloseTab => {
+                        if self.tabs.len() > 1 {
+                            self.tabs.remove(self.active_tab);
+                            self.active_tab = self.active_tab.saturating_sub(1);
+                        }
+                    }
                     AppEvent::Quit => self.quit(),
                 },
                 Event::ActiveTabKey(key_event) => {
@@ -93,6 +102,12 @@ impl App {
             KeyCode::Esc | KeyCode::Char('q') => self.events.send(Event::App(AppEvent::Quit)),
             KeyCode::Char('c' | 'C') if key_event.modifiers == KeyModifiers::CONTROL => {
                 self.events.send(Event::App(AppEvent::Quit))
+            }
+            KeyCode::Char('t' | 'T') if key_event.modifiers == KeyModifiers::CONTROL => {
+                self.events.send(Event::App(AppEvent::CreateTab))
+            }
+            KeyCode::Char('w' | 'W') if key_event.modifiers == KeyModifiers::CONTROL => {
+                self.events.send(Event::App(AppEvent::CloseTab))
             }
             KeyCode::Right => self.events.send(Event::App(AppEvent::Increment)),
             KeyCode::Left => self.events.send(Event::App(AppEvent::Decrement)),
