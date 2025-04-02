@@ -45,7 +45,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_buckets() {
-        let profile = "xalgo_kambi_adapter".to_string();
+        let profile = "default".to_string();
         let region = "eu-west-1".to_string();
         let client = S3Client::new(profile, region).await.unwrap();
         let buckets = client.list_buckets().await.unwrap();

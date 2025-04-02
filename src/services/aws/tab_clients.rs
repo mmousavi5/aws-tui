@@ -96,7 +96,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_dynamodb_tables() {
-        let profile = "xalgo_kambi_adapter".to_string();
+        let profile = "default".to_string();
         let region = "eu-west-1".to_string();
         let mut client = TabClients::new(profile, region);
         let tables = client.list_dynamodb_tables().await.unwrap();
