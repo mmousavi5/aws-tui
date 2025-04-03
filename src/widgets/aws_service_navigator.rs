@@ -23,6 +23,7 @@ pub enum WidgetType {
     AWSService,
     S3,
     DynamoDB,
+    InputBox,
 }
 
 pub struct AWSServiceNavigator {

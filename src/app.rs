@@ -75,6 +75,10 @@ impl App {
                     self.route_event(key_event);
                 }
                 Event::AWSProfileEvent(profile) => self.set_active_tab_name(&profile),
+                Event::S3InputBoxEvent(input) => {
+                    // Handle S3 input box event
+                    self.handle_input_box_event(input).await?;
+                }
                 Event::WidgetEvent(event) => {
                     // Handle widget events here
                     match event {
@@ -164,5 +168,12 @@ impl App {
         } else {
             panic!("No active tab found");
         }
+    }
+
+    pub async fn handle_input_box_event(&mut self, input: String) -> color_eyre::Result<()> {
+        if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+            tab.handle_input_box_event(input).await?;
+        }
+        Ok(())
     }
 }

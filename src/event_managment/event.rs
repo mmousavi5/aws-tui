@@ -33,6 +33,8 @@ pub enum Event {
     AWSProfileEvent(String),
     /// Widget event.
     WidgetEvent(WidgetEventType),
+    /// S3 inputbox event.
+    S3InputBoxEvent(String),
 }
 
 

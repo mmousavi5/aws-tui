@@ -2,6 +2,7 @@
 pub(crate) mod paragraph;
 pub(crate) mod popup;
 pub(crate) mod aws_service_navigator;
+pub(crate) mod input_box;
 use std::any::Any;
 
 use ratatui::{

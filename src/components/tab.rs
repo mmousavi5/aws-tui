@@ -13,6 +13,7 @@ use crate::{
         paragraph::ParagraphWidget,
         popup::PopupWidget,
         aws_service_navigator::{AWSServiceNavigator, WidgetType, NavigatorContent},
+        input_box::InputBoxWidget,
     },
 };
 use std::collections::HashMap;
@@ -43,8 +44,8 @@ impl Tab {
     ) -> Self {
         let mut right_widgets:HashMap<WidgetType, Box<dyn WidgetExt>>  = HashMap::new();
         right_widgets.insert(
-            WidgetType::Default,
-            Box::new(ParagraphWidget::new(content, false))
+            WidgetType::InputBox,
+            Box::new(InputBoxWidget::new("Inputbox", true))
         );
 
         Self {
@@ -58,7 +59,7 @@ impl Tab {
             )),
             popup_widget: Some(Box::new(PopupWidget::new(content, true, event_sender.clone()))),
             right_widgets,
-            active_right_widget: WidgetType::Default,
+            active_right_widget: WidgetType::InputBox,
             event_sender,
             toggle_focus: false,
             aws_clients: TabClients::new(String::new(), String::from("eu-west-1")),
@@ -242,6 +243,14 @@ impl Tab {
             WidgetEventType::RecordSelected(_) => return Ok(()),
         }
         self.right_widgets.remove(&WidgetType::Default);
+        Ok(())
+    }
+    
+    pub async fn handle_input_box_event(&mut self, input: String) -> color_eyre::Result<()> {
+        if let Some(input_box) = self.right_widgets.get_mut(&WidgetType::InputBox) {
+            if let Some(input_box_widget) = input_box.as_any_mut().downcast_mut::<InputBoxWidget>() {
+                todo!("Handle input box event");}
+        }
         Ok(())
     }
 }
