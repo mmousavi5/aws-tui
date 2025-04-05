@@ -5,9 +5,8 @@ use ratatui::{
     style::{Color, Style},
     widgets::{self, Block, BorderType, Borders, Clear, Paragraph, Widget},
 };
-use crate::{services, widgets::WidgetExt};
-use crate::event_managment::event::WidgetEventType;
-use crate::event_managment::event::Event;
+use crate::{event_managment::event::{AWSServiceNavigatorEvent, TabActions}, services, widgets::WidgetExt};
+use crate::event_managment::event::{WidgetEventType, Event, TabEvent, WidgetActions, WidgetType};
 use std::any::Any;
 
 #[derive(Clone)]
@@ -16,30 +15,20 @@ pub enum NavigatorContent {
     Records(Vec<String>),
 }
 
-#[derive(Hash, Eq, PartialEq, Clone)]
-pub enum WidgetType {
-    Default,
-    AWSServiceNavigator,
-    AWSService,
-    S3,
-    DynamoDB,
-    InputBox,
-}
-
 pub struct AWSServiceNavigator {
     widget_type: WidgetType,
     content: NavigatorContent,
     selected_index: usize,
     active: bool,
     visible: bool,
-    pub unbounded_channel_sender: tokio::sync::mpsc::UnboundedSender<Event>,
+    event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
 }
 
 impl AWSServiceNavigator {
     pub fn new(
         widget_type: WidgetType,
         active: bool,
-        unbounded_channel_sender: tokio::sync::mpsc::UnboundedSender<Event>,
+        event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
         content: NavigatorContent,
     ) -> Self {
         Self {
@@ -48,7 +37,7 @@ impl AWSServiceNavigator {
             selected_index: 0,
             active,
             visible: true,
-            unbounded_channel_sender,
+            event_sender,
         }
     }
 
@@ -63,10 +52,10 @@ impl AWSServiceNavigator {
         match &self.content {
             NavigatorContent::Services(services) => services
                 .get(self.selected_index)
-                .map(|service| Event::WidgetEvent(service.clone())),
+                .map(|service| Event::Tab(TabEvent::TabActions(TabActions::AWSServiceSelected(service.clone())))),
             NavigatorContent::Records(records) => records
                 .get(self.selected_index)
-                .map(|record| Event::WidgetEvent(WidgetEventType::RecordSelected(record.clone()))),
+                .map(|record| Event::Tab(TabEvent::TabActions(TabActions::AWSServiceSelected(WidgetEventType::RecordSelected(record.clone()))))),
         }
     }
 
@@ -84,7 +73,7 @@ impl WidgetExt for AWSServiceNavigator {
         let border_style = if self.active {
             Style::default().fg(Color::Red)
         } else {
-            Style::default()
+            Style::default().fg(Color::White)
         };
 
         let outer_block = Block::default()
@@ -100,7 +89,7 @@ impl WidgetExt for AWSServiceNavigator {
             })
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .border_style(border_style);
+            .border_style(Style::default().fg(Color::White));
 
         outer_block.render(area, buf);
 
@@ -153,26 +142,12 @@ impl WidgetExt for AWSServiceNavigator {
         paragraph.render(text_area, buf);
     }
 
-    fn handle_input(&mut self, key_event: KeyEvent) {
+    fn handle_input(&mut self, key_event: KeyEvent) -> Option<WidgetActions> {
         match key_event.code {
-            KeyCode::Up => {
-                if self.selected_index > 0 {
-                    self.selected_index -= 1;
-                }
-            }
-            KeyCode::Down => {
-                if self.selected_index < self.content_len().saturating_sub(1) {
-                    self.selected_index += 1;
-                }
-            }
-            KeyCode::Enter => {
-                if let Some(event) = self.selected_item() {
-                    if let Err(e) = self.unbounded_channel_sender.send(event) {
-                        eprintln!("Error sending event: {}", e);
-                    }
-                }
-            }
-            _ => {}
+            KeyCode::Up => Some(WidgetActions::AWSServiceNavigatorEvent(AWSServiceNavigatorEvent::ArrowUp, self.widget_type.clone())),
+            KeyCode::Down => Some(WidgetActions::AWSServiceNavigatorEvent(AWSServiceNavigatorEvent::ArrowDown, self.widget_type.clone())),
+            KeyCode::Enter => Some(WidgetActions::AWSServiceNavigatorEvent(AWSServiceNavigatorEvent::Enter, self.widget_type.clone())),
+            _ => None
         }
     }
 
@@ -180,8 +155,8 @@ impl WidgetExt for AWSServiceNavigator {
         self.visible
     }
 
-    fn set_active(&mut self) {
-        self.active = true;
+    fn set_active(&mut self, active: bool) {
+        self.active = active;
     }
 
     fn set_inactive(&mut self) {
@@ -193,5 +168,36 @@ impl WidgetExt for AWSServiceNavigator {
     }
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
+    }
+    fn process_event(&mut self, event: WidgetActions) {
+        match event {
+            WidgetActions::AWSServiceNavigatorEvent(event, _) => match event {
+                AWSServiceNavigatorEvent::ArrowUp => {
+                    if self.selected_index > 0 {
+                        self.selected_index -= 1;
+                    }
+                }
+                AWSServiceNavigatorEvent::ArrowDown => {
+                    if self.selected_index < self.content_len().saturating_sub(1) {
+                        self.selected_index += 1;
+                    }
+                }
+                AWSServiceNavigatorEvent::Enter => {
+                    if let Some(event) = self.selected_item() {
+                        if let Err(e) = self.event_sender.send(event) {
+                            eprintln!("Error sending event: {}", e);
+                        }
+                    }
+                }
+                AWSServiceNavigatorEvent::Escape => {
+                    self.set_visible(false);
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+    fn is_active(&self) -> bool {
+        self.active
     }
 }

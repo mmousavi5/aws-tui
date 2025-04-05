@@ -3,15 +3,12 @@ use futures::{FutureExt, StreamExt};
 use ratatui::crossterm::event::Event as CrosstermEvent;
 use std::time::Duration;
 use tokio::sync::mpsc;
-
 use ratatui::crossterm::event:: KeyEvent;
-use std::fmt::Display;
-
 /// The frequency at which tick events are emitted.
 const TICK_FPS: f64 = 30.0;
 
 /// Representation of all possible events.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum Event {
     /// An event that is emitted on a regular schedule.
     ///
@@ -27,14 +24,82 @@ pub enum Event {
     ///
     /// Use this event to emit custom events that are specific to your application.
     App(AppEvent),
-    /// Active tab event.
-    ActiveTabKey(KeyEvent),
-    /// AWS profile event.
-    AWSProfileEvent(String),
-    /// Widget event.
-    WidgetEvent(WidgetEventType),
-    /// S3 inputbox event.
-    S3InputBoxEvent(String),
+    /// Tab events.
+    Tab(TabEvent),
+
+}
+
+#[derive(Clone)]
+pub enum TabEvent {
+    TabActions(TabActions),
+    WidgetActions(WidgetActions),
+    ComponentActions(ComponentActions),
+}
+
+#[derive(Clone)]
+pub enum ComponentActions {
+    ArrowUp,
+    ArrowDown,
+    NextFocus,
+    WidgetActions(WidgetActions),
+}
+
+#[derive(Clone)]
+pub enum WidgetActions {
+    AWSServiceNavigatorEvent(AWSServiceNavigatorEvent, WidgetType),
+    InputBoxEvent(InputBoxEvent),
+    ParagraphEvent(ParagraphEvent),
+    ToggleFocus,
+    PopupEvent(PopupEvent),
+}
+
+#[derive(Clone, Debug)]
+pub enum TabActions {
+    NextFocus,
+    ProfileSelected(String),
+    AWSServiceSelected(WidgetEventType),
+}
+
+
+#[derive(Clone)]
+pub enum PopupEvent {
+    ArrowUp,
+    ArrowDown,
+    Enter,
+    Escape,
+    Cancel,
+}
+
+#[derive(Clone)]
+pub enum AWSServiceNavigatorEvent {
+    ArrowUp,
+    ArrowDown,
+    Enter,
+    Escape,
+    Cancel,
+}
+
+#[derive(Clone)]
+pub enum InputBoxEvent {
+    ArrowUp,
+    ArrowDown,
+    Enter,
+    Escape,
+    Cancel,
+    Backspace,
+    Delete,
+    Left,
+    Right,
+    KeyPress(KeyEvent),
+}
+
+#[derive(Clone)]
+pub enum ParagraphEvent {
+    ArrowUp,
+    ArrowDown,
+    Enter,
+    Escape,
+    Cancel,
 }
 
 
@@ -67,10 +132,6 @@ impl std::fmt::Display for WidgetEventType {
 /// You can extend this enum with your own custom events.
 #[derive(Clone, Debug)]
 pub enum AppEvent {
-    /// Increment the counter.
-    Increment,
-    /// Decrement the counter.
-    Decrement,
     /// Switch to the next tab.
     NextTab,
     /// Create a new tab.
@@ -79,6 +140,17 @@ pub enum AppEvent {
     CloseTab,
     /// Quit the application.
     Quit,
+}
+
+#[derive(Hash, Eq, PartialEq, Clone, Copy)]
+pub enum WidgetType {
+    Default,
+    AWSServiceNavigator,
+    AWSService,
+    S3,
+    DynamoDB,
+    InputBox,
+    QueryResultsNavigator,
 }
 
 /// Terminal event handler.

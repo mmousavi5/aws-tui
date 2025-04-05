@@ -9,6 +9,15 @@ use ratatui::layout::Alignment;
 use ratatui::widgets::{Borders, Wrap};
 use crate::widgets::WidgetExt;
 use std::any::Any;
+use crate::event_managment::event::{WidgetActions, TabEvent};
+
+pub enum ParagraphEvent {
+    ArrowUp,
+    ArrowDown,
+    Enter,
+    Escape,
+    Cancel,
+}
 
 pub struct ParagraphWidget {
     pub text:  String,
@@ -81,5 +90,8 @@ impl WidgetExt for ParagraphWidget {
     }
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
+    }
+    fn process_event(&mut self, event: WidgetActions) {
+        todo!()
     }
 }

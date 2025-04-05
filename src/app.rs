@@ -1,11 +1,11 @@
-use crate::event_managment::event::{AppEvent, Event, EventHandler};
+use crate::event_managment::event::{AppEvent, Event, EventHandler, TabActions};
 use crossterm::event;
 use ratatui::{
     DefaultTerminal,
     crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
 };
 use crate::components::tab::Tab;
-use crate::event_managment::event::WidgetEventType;
+use crate::event_managment::event::{WidgetEventType, TabEvent, WidgetActions};
 
 
 /// Application.
@@ -56,44 +56,11 @@ impl App {
                     crossterm::event::Event::Key(key_event) => self.handle_key_events(key_event)?,
                     _ => {}
                 },
-                Event::App(app_event) => match app_event {
-                    AppEvent::Increment => self.increment_counter(),
-                    AppEvent::Decrement => self.decrement_counter(),
-                    AppEvent::NextTab => self.next_tab(),
-                    AppEvent::CreateTab => {
-                        self.tabs.push(Tab::new("New Tab", "This is a new tab.", self.events.sender.clone()));
-                    }
-                    AppEvent::CloseTab => {
-                        if self.tabs.len() > 1 {
-                            self.tabs.remove(self.active_tab);
-                            self.active_tab = self.active_tab.saturating_sub(1);
-                        }
-                    }
-                    AppEvent::Quit => self.quit(),
-                },
-                Event::ActiveTabKey(key_event) => {
-                    self.route_event(key_event);
+                Event::App(app_event) => {
+                    self.apply_app_state(app_event);
                 }
-                Event::AWSProfileEvent(profile) => self.set_active_tab_name(&profile),
-                Event::S3InputBoxEvent(input) => {
-                    // Handle S3 input box event
-                    self.handle_input_box_event(input).await?;
-                }
-                Event::WidgetEvent(event) => {
-                    // Handle widget events here
-                    match event {
-                        WidgetEventType::S3 => {
-                            self.update_sub_widgets(WidgetEventType::S3).await;
-                            // Handle S3 event
-                        }
-                        WidgetEventType::DynamoDB => {
-                            self.update_sub_widgets(WidgetEventType::DynamoDB).await;
-                            // Handle DynamoDB event
-                        }
-                        _ => {
-                            // Handle other events
-                        }
-                    }
+                Event::Tab(tab_event) => {
+                    self.apply_tab_state(tab_event).await;
                 }
             }
         }
@@ -113,14 +80,43 @@ impl App {
             KeyCode::Char('w' | 'W') if key_event.modifiers == KeyModifiers::CONTROL => {
                 self.events.send(Event::App(AppEvent::CloseTab))
             }
-            KeyCode::Right => self.events.send(Event::App(AppEvent::Increment)),
-            KeyCode::Left => self.events.send(Event::App(AppEvent::Decrement)),
             KeyCode::Tab => self.events.send(Event::App(AppEvent::NextTab)),
             // Other handlers you could add here.
-            _ => {self.events.send(Event::ActiveTabKey(key_event));},
+            _ => {
+                if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+                    tab.handle_input(key_event);
+                }
+            },
         }
         Ok(())
     }
+
+    pub fn apply_app_state(&mut self, app_state: AppEvent) {
+        match app_state {
+            AppEvent::NextTab => self.next_tab(),
+            AppEvent::CreateTab => {
+                self.tabs.push(Tab::new("New Tab", "This is a new tab.", self.events.sender.clone()));
+            }
+            AppEvent::CloseTab => {
+                if self.tabs.len() > 1 {
+                    self.tabs.remove(self.active_tab);
+                    self.active_tab = self.active_tab.saturating_sub(1);
+                }
+            }
+            AppEvent::Quit => self.quit(),
+        }
+    }
+
+    pub async fn apply_tab_state(&mut self, tab_event: TabEvent) {
+        // match tab_state {
+        //     TabEvent::TabActions(TabActions::ProfileSelected(profile)) => self.set_active_tab_name(&profile),
+        //     _ => {}
+        // }
+        if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+            tab.process_event(tab_event);
+        }
+    }
+
 
     /// Handles the tick event of the terminal.
     ///
@@ -133,25 +129,10 @@ impl App {
         self.running = false;
     }
 
-    pub fn increment_counter(&mut self) {
-        self.counter = self.counter.saturating_add(1);
-    }
-
-    pub fn decrement_counter(&mut self) {
-        self.counter = self.counter.saturating_sub(1);
-    }
-
     /// Switch to the next tab.
     pub fn next_tab(&mut self) {
         // self.tabs[self.active_tab].show_popup = false;
         self.active_tab = (self.active_tab + 1) % self.tabs.len();
-    }
-
-    /// Route the event to the active tab.
-    pub fn route_event(&mut self, key_event: KeyEvent) {
-        if let Some(tab) = self.tabs.get_mut(self.active_tab) {
-            tab.handle_input(key_event);
-        }
     }
 
     pub fn set_active_tab_name(&mut self, name: &str) {
@@ -161,19 +142,26 @@ impl App {
     }
 
     pub async fn update_sub_widgets(&mut self, event_type: WidgetEventType) {
-        if let Some(tab) = self.tabs.get_mut(self.active_tab) {
-            if let Err(e) = tab.update_sub_widgets(event_type).await {
-                eprintln!("Error updating sub widgets: {}", e);
-            }
-        } else {
-            panic!("No active tab found");
-        }
+        // if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+        //     if let Err(e) = tab.update_sub_widgets(event_type).await {
+        //         eprintln!("Error updating sub widgets: {}", e);
+        //     }
+        // } else {
+        //     panic!("No active tab found");
+        // }
     }
 
-    pub async fn handle_input_box_event(&mut self, input: String) -> color_eyre::Result<()> {
-        if let Some(tab) = self.tabs.get_mut(self.active_tab) {
-            tab.handle_input_box_event(input).await?;
-        }
-        Ok(())
-    }
+    // pub async fn handle_input_box_event(&mut self, input: String) -> color_eyre::Result<()> {
+    //     if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+    //         tab.handle_input_box_event(input).await?;
+    //     }
+    //     Ok(())
+    // }
+
+    // pub fn apply_tab_action(&mut self, tab_action: TabEvent) {
+    //     if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+    //         tab.process_event(tab_action);
+    //     }
+    // }
 }
+ 

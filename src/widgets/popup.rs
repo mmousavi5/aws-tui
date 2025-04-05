@@ -1,3 +1,4 @@
+use aws_config::profile;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
@@ -9,7 +10,7 @@ use ratatui::{
 };
 use crate::{
     widgets::WidgetExt,
-    event_managment::event::{AppEvent, Event, EventHandler},
+    event_managment::event::{AppEvent, Event, WidgetActions, TabEvent, PopupEvent, TabActions},
     services::read_config,
 };
 use std::any::Any;
@@ -17,6 +18,8 @@ use std::any::Any;
 const POPUP_MARGIN: u16 = 5;
 const MIN_POPUP_WIDTH: u16 = 20;
 const MIN_POPUP_HEIGHT: u16 = 10;
+
+
 
 #[derive(Debug)]
 pub struct PopupWidget {
@@ -124,27 +127,13 @@ impl WidgetExt for PopupWidget {
             .render(content_area, buf);
     }
 
-    fn handle_input(&mut self, key_event: KeyEvent) {
+    fn handle_input(&mut self, key_event: KeyEvent) -> Option<WidgetActions> {
         match key_event.code {
-            KeyCode::Up => {
-                self.selected_index = self.selected_index.saturating_sub(1);
-            }
-            KeyCode::Down => {
-                if self.selected_index < self.profile_list.len().saturating_sub(1) {
-                    self.selected_index += 1;
-                }
-            }
-            KeyCode::Enter => {
-                self.visible = false;
-                if let Some(profile) = self.profile_list.get(self.selected_index) {
-                    self.profile_name = Some(profile.clone());
-                    let _ = self.event_sender.send(Event::AWSProfileEvent(profile.clone()));
-                }
-            }
-            KeyCode::Esc => {
-                self.visible = false;
-            }
-            _ => {}
+            KeyCode::Up => Some(WidgetActions::PopupEvent(PopupEvent::ArrowUp)),
+            KeyCode::Down => Some(WidgetActions::PopupEvent(PopupEvent::ArrowDown)),
+            KeyCode::Enter => Some(WidgetActions::PopupEvent(PopupEvent::Enter)),
+            KeyCode::Esc => Some(WidgetActions::PopupEvent(PopupEvent::Escape)),
+            _ => None,
         }
     }
 
@@ -152,8 +141,8 @@ impl WidgetExt for PopupWidget {
         self.visible
     }
 
-    fn set_active(&mut self) {
-        self.active = true;
+    fn set_active(&mut self, active: bool) {
+        self.active = active;
     }
 
     fn set_inactive(&mut self) {
@@ -165,5 +154,37 @@ impl WidgetExt for PopupWidget {
     }
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
+    }
+    fn process_event(&mut self, event: WidgetActions) {
+        match event {
+            WidgetActions::PopupEvent(event) => match event {
+                PopupEvent::ArrowUp => {
+                    if self.selected_index > 0 {
+                        self.selected_index -= 1;
+                    }
+                }
+                PopupEvent::ArrowDown => {
+                    if self.selected_index < self.profile_list.len() - 1 {
+                        self.selected_index += 1;
+                    }
+                }
+                PopupEvent::Enter => {
+                    if let Some(profile) = self.profile_list.get(self.selected_index) {
+                        self.profile_name = Some(profile.clone());
+                        if let Err(e) = self.event_sender.send(Event::Tab(TabEvent::TabActions(TabActions::ProfileSelected(self.profile_name.clone().unwrap())))) {
+                            eprintln!("Failed to send profile selected event: {}", e);
+                        }
+                    }
+                }
+                PopupEvent::Escape => {
+                    self.set_visible(false);
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+    fn is_active(&self) -> bool {
+        self.active
     }
 }

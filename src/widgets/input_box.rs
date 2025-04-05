@@ -10,6 +10,7 @@ use ratatui::layout::Alignment;
 use ratatui::widgets::{Borders, Wrap};
 use crate::widgets::WidgetExt;
 use std::any::Any;
+use crate::event_managment::event::{WidgetActions, InputBoxEvent};
 
 pub struct InputBoxWidget {
     content: String,
@@ -42,7 +43,7 @@ impl WidgetExt for InputBoxWidget {
         }
 
         let border_style = if self.active {
-            Style::default().fg(Color::Blue)
+            Style::default().fg(Color::Red)
         } else {
             Style::default()
         };
@@ -67,44 +68,17 @@ impl WidgetExt for InputBoxWidget {
         paragraph.render(area, buf);
     }
 
-    fn handle_input(&mut self, key_event: KeyEvent) {
-        if !self.active {
-            return;
-        }
-
+    fn handle_input(&mut self, key_event: KeyEvent)  -> Option<WidgetActions>  {
+        // if !self.active {
+        //     return;
+        // }
         match key_event.code {
-            KeyCode::Char(c) => {
-                self.content.insert(self.cursor_position, c);
-                self.cursor_position += 1;
-            }
-            KeyCode::Backspace => {
-                if self.cursor_position > 0 {
-                    self.cursor_position -= 1;
-                    self.content.remove(self.cursor_position);
-                }
-            }
-            KeyCode::Delete => {
-                if self.cursor_position < self.content.len() {
-                    self.content.remove(self.cursor_position);
-                }
-            }
-            KeyCode::Left => {
-                if self.cursor_position > 0 {
-                    self.cursor_position -= 1;
-                }
-            }
-            KeyCode::Right => {
-                if self.cursor_position < self.content.len() {
-                    self.cursor_position += 1;
-                }
-            }
-            KeyCode::Home => {
-                self.cursor_position = 0;
-            }
-            KeyCode::End => {
-                self.cursor_position = self.content.len();
-            }
-            _ => {}
+            KeyCode::Char(ref _c) => Some(WidgetActions::InputBoxEvent(InputBoxEvent::KeyPress(key_event))),
+            KeyCode::Backspace => Some(WidgetActions::InputBoxEvent(InputBoxEvent::Backspace)),
+            KeyCode::Delete => Some(WidgetActions::InputBoxEvent(InputBoxEvent::Delete)),
+            KeyCode::Left => Some(WidgetActions::InputBoxEvent(InputBoxEvent::Left)),
+            _ => None
+            
         }
     }
 
@@ -112,8 +86,8 @@ impl WidgetExt for InputBoxWidget {
         self.visible
     }
 
-    fn set_active(&mut self) {
-        self.active = true;
+    fn set_active(&mut self, active: bool) {
+        self.active = active;
     }
 
     fn set_inactive(&mut self) {
@@ -126,5 +100,40 @@ impl WidgetExt for InputBoxWidget {
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
+    }
+    fn process_event(&mut self, event: WidgetActions) {
+
+        match event {
+            WidgetActions::InputBoxEvent(input_event) => match input_event {
+                InputBoxEvent::KeyPress(key_event) => {
+                    if let KeyCode::Char(c) = key_event.code {
+                        self.content.insert(self.cursor_position, c);
+                        self.cursor_position += 1;
+                    }
+                }
+                InputBoxEvent::Backspace => {
+                    if self.cursor_position > 0 {
+                        self.cursor_position -= 1;
+                        self.content.remove(self.cursor_position);
+                    }
+                }
+                InputBoxEvent::Delete => {
+                    if self.cursor_position < self.content.len() {
+                        self.content.remove(self.cursor_position);
+                    }
+                }
+                InputBoxEvent::Left => {
+                    if self.cursor_position > 0 {
+                        self.cursor_position -= 1;
+                    }
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+        
+    }
+    fn is_active(&self) -> bool {
+        self.active
     }
 }
