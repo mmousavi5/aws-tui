@@ -30,13 +30,12 @@ pub struct DynamoDB {
     visible: bool,
     event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
     current_focus: ComponentFocus,
-    s3_client: Arc<Mutex<S3Client>>,
+    s3_client: Option<Arc<Mutex<S3Client>>>,
 }
 
 impl DynamoDB {
     pub fn new(
         event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
-        s3_client: Arc<Mutex<S3Client>>,
     ) -> Self {
         Self {
             table_list_navigator: AWSServiceNavigator::new(
@@ -64,7 +63,7 @@ impl DynamoDB {
             visible: true,
             event_sender,
             current_focus: ComponentFocus::Navigation,
-            s3_client,
+            s3_client: None,
         }
     }
 
@@ -200,6 +199,10 @@ impl DynamoDB {
         self.current_focus = ComponentFocus::Navigation;
     }
 
+    pub fn set_s3_client(&mut self, s3_client: Arc<Mutex<S3Client>>) {
+        self.s3_client = Some(s3_client);
+    }
+
     pub fn focus_next(&mut self) -> ComponentFocus {
         self.current_focus = match self.current_focus {
             ComponentFocus::Navigation => ComponentFocus::Input,
@@ -208,5 +211,14 @@ impl DynamoDB {
             ComponentFocus::None => ComponentFocus::Navigation,
         };
         self.current_focus
+    }
+    pub async fn update(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        // Update the DynamoDB tables list if client is available
+        if let Some(client) = &self.s3_client {
+            let client = client.lock().await;
+            let tables = client.list_buckets().await?;
+            self.table_list_navigator.set_content(NavigatorContent::Records(tables));
+        }
+        Ok(())
     }
 }

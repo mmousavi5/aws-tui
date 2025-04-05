@@ -115,7 +115,7 @@ impl App {
         //     _ => {}
         // }
         if let Some(tab) = self.tabs.get_mut(self.active_tab) {
-            tab.process_event(tab_event);
+            tab.process_event(tab_event).await;
         }
     }
 

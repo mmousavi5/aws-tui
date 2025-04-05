@@ -52,7 +52,7 @@ impl TabClients {
         }
     }
 
-    async fn get_s3_client(&mut self) -> Result<Arc<Mutex<S3Client>>, TabClientsError> {
+    pub async fn get_s3_client(&mut self) -> Result<Arc<Mutex<S3Client>>, TabClientsError> {
         if self.s3_client.is_none() {
             let client = S3Client::new(self.profile.clone(), self.region.clone()).await?;
             self.s3_client = Some(Arc::new(Mutex::new(client)));

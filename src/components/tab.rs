@@ -137,10 +137,10 @@ impl Tab {
             }
         }
     }
-    pub fn process_event(&mut self, tab_event: TabEvent) {
+    pub async fn process_event(&mut self, tab_event: TabEvent) {
         match tab_event {
             TabEvent::TabActions(tab_acion) => {
-                self.process_tab_action(tab_acion);
+                self.process_tab_action(tab_acion).await;
             }
             TabEvent::WidgetActions(widget_action) => match widget_action {
                 WidgetActions::PopupEvent(ref _popup_event) => {
@@ -164,10 +164,16 @@ impl Tab {
         }
     }
 
-    pub fn process_tab_action(&mut self, tab_action: TabActions) {
+    pub async fn process_tab_action(&mut self, tab_action: TabActions) {
         match tab_action {
             TabActions::ProfileSelected(profile) => {
                 self.set_name(profile);
+            }
+            TabActions::AWSServiceSelected(service) => {
+                if let Some(widget) = self.right_widgets.get_mut(&self.active_right_widget) {
+                    widget.set_s3_client(self.aws_clients.get_s3_client().await.unwrap());
+                    widget.update().await;    
+                }
             }
             TabActions::NextFocus => {
                 if self.current_focus == TabFocus::Left {
