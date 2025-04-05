@@ -1,7 +1,7 @@
-use aws_config::{defaults, BehaviorVersion, Region};
-use aws_sdk_s3::{Client, Error as S3Error};
+use aws_config::{BehaviorVersion, Region, defaults};
 use aws_sdk_s3::error::SdkError;
 use aws_sdk_s3::operation::list_buckets::ListBucketsError;
+use aws_sdk_s3::{Client, Error as S3Error};
 use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
 use thiserror::Error;
 
@@ -24,14 +24,15 @@ impl S3Client {
             .region(Region::new(region))
             .load()
             .await;
-        Ok(Self { 
-            client: Client::new(&config) 
+        Ok(Self {
+            client: Client::new(&config),
         })
     }
 
     pub async fn list_buckets(&self) -> Result<Vec<String>, S3ClientError> {
         let output = self.client.list_buckets().send().await?;
-        Ok(output.buckets()
+        Ok(output
+            .buckets()
             .iter()
             .filter_map(|bucket| bucket.name().map(String::from))
             .collect())

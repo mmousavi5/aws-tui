@@ -1,14 +1,16 @@
-use crate::widgets::input_box::InputBoxWidget;
+use crate::event_managment::event::{
+    ComponentActions, Event, InputBoxEvent, TabEvent, WidgetActions, WidgetType,
+};
+use crate::services::aws::s3_client::{self, S3Client};
+use crate::widgets::WidgetExt;
 use crate::widgets::aws_service_navigator::{AWSServiceNavigator, NavigatorContent};
+use crate::widgets::input_box::InputBoxWidget;
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
-    layout::{Layout, Direction, Constraint, Rect},
+    layout::{Constraint, Direction, Layout, Rect},
     widgets::Widget,
 };
-use crate::event_managment::event::{Event, WidgetActions, ComponentActions, TabEvent, WidgetType, InputBoxEvent};
-use crate::widgets::WidgetExt;
-use crossterm::event::{KeyCode, KeyEvent};
-use crate::services::aws::s3_client::{self, S3Client};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -32,20 +34,31 @@ pub struct DynamoDB {
 }
 
 impl DynamoDB {
-    pub fn new(event_sender: tokio::sync::mpsc::UnboundedSender<Event>, s3_client: Arc<Mutex<S3Client>>) -> Self {
+    pub fn new(
+        event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
+        s3_client: Arc<Mutex<S3Client>>,
+    ) -> Self {
         Self {
             table_list_navigator: AWSServiceNavigator::new(
                 WidgetType::AWSServiceNavigator,
                 false,
                 event_sender.clone(),
-                NavigatorContent::Records(vec!["DynamoDB".to_string(), "S3".to_string(), "Lambda".to_string()]),
+                NavigatorContent::Records(vec![
+                    "DynamoDB".to_string(),
+                    "S3".to_string(),
+                    "Lambda".to_string(),
+                ]),
             ),
             query_input: InputBoxWidget::new("Query Input", false, event_sender.clone()),
             query_results_navigator: AWSServiceNavigator::new(
                 WidgetType::QueryResultsNavigator,
                 false,
                 event_sender.clone(),
-                NavigatorContent::Records(vec!["q1".to_string(), "q2".to_string(), "q3".to_string()]),
+                NavigatorContent::Records(vec![
+                    "q1".to_string(),
+                    "q2".to_string(),
+                    "q3".to_string(),
+                ]),
             ),
             active: false,
             visible: true,
@@ -85,14 +98,17 @@ impl DynamoDB {
         self.query_input.render(right_vertical_split[0], buf);
 
         // Render query results navigator (bottom of right panel)
-        self.query_results_navigator.render(right_vertical_split[1], buf);
+        self.query_results_navigator
+            .render(right_vertical_split[1], buf);
     }
 
     pub fn handle_input(&mut self, key_event: crossterm::event::KeyEvent) {
         match key_event.code {
             KeyCode::Char('t') => {
                 self.event_sender
-                    .send(Event::Tab(TabEvent::ComponentActions(ComponentActions::NextFocus)))
+                    .send(Event::Tab(TabEvent::ComponentActions(
+                        ComponentActions::NextFocus,
+                    )))
                     .unwrap();
             }
             _ => {
@@ -104,7 +120,9 @@ impl DynamoDB {
                     ComponentFocus::None => None,
                 } {
                     self.event_sender
-                        .send(Event::Tab(TabEvent::ComponentActions(ComponentActions::WidgetActions(signal))))
+                        .send(Event::Tab(TabEvent::ComponentActions(
+                            ComponentActions::WidgetActions(signal),
+                        )))
                         .unwrap();
                 }
             }
@@ -112,11 +130,13 @@ impl DynamoDB {
     }
 
     fn update_widget_states(&mut self) {
-        self.table_list_navigator.set_active(self.active & (self.current_focus == ComponentFocus::Navigation));
-        self.query_input.set_active(self.active & (self.current_focus == ComponentFocus::Input));
-        self.query_results_navigator.set_active(self.active &(self.current_focus == ComponentFocus::Results));
+        self.table_list_navigator
+            .set_active(self.active & (self.current_focus == ComponentFocus::Navigation));
+        self.query_input
+            .set_active(self.active & (self.current_focus == ComponentFocus::Input));
+        self.query_results_navigator
+            .set_active(self.active & (self.current_focus == ComponentFocus::Results));
     }
-
 
     fn is_visible(&self) -> bool {
         self.visible
@@ -140,34 +160,33 @@ impl DynamoDB {
 
     pub fn process_event(&mut self, event: ComponentActions) {
         match event {
-            ComponentActions::ArrowDown => {
-            }
-            ComponentActions::ArrowUp => {
-            }
+            ComponentActions::ArrowDown => {}
+            ComponentActions::ArrowUp => {}
             ComponentActions::NextFocus => {
                 self.focus_next();
                 self.update_widget_states();
-
             }
-            ComponentActions::WidgetActions(widget_action) => {
-                match widget_action {
-                    WidgetActions::AWSServiceNavigatorEvent(ref _aws_navigator_event, widget_type) => {
-                        if widget_type == WidgetType::AWSServiceNavigator {
-                            self.table_list_navigator.process_event(widget_action.clone());
-                        } else if widget_type == WidgetType::QueryResultsNavigator {
-                            self.query_results_navigator.process_event(widget_action.clone());
-                        }
+            ComponentActions::WidgetActions(widget_action) => match widget_action {
+                WidgetActions::AWSServiceNavigatorEvent(ref _aws_navigator_event, widget_type) => {
+                    if widget_type == WidgetType::AWSServiceNavigator {
+                        self.table_list_navigator
+                            .process_event(widget_action.clone());
+                    } else if widget_type == WidgetType::QueryResultsNavigator {
+                        self.query_results_navigator
+                            .process_event(widget_action.clone());
                     }
-                    WidgetActions::InputBoxEvent(InputBoxEvent::Written(content)) => {
-                        let content_vec: Vec<String> = content.lines().map(|line| line.to_string()).collect();
-                        self.query_results_navigator.set_content(NavigatorContent::Records(content_vec));
-                    }
-                    WidgetActions::InputBoxEvent(ref _input_box_event) => {
-                        self.query_input.process_event(widget_action);
-                    }
-                    _ => {}
                 }
-            }
+                WidgetActions::InputBoxEvent(InputBoxEvent::Written(content)) => {
+                    let content_vec: Vec<String> =
+                        content.lines().map(|line| line.to_string()).collect();
+                    self.query_results_navigator
+                        .set_content(NavigatorContent::Records(content_vec));
+                }
+                WidgetActions::InputBoxEvent(ref _input_box_event) => {
+                    self.query_input.process_event(widget_action);
+                }
+                _ => {}
+            },
             // Add specific DynamoDB event handling here
             _ => {}
         }

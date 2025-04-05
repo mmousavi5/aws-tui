@@ -1,2 +1,2 @@
-pub(crate) mod tab;
 pub(crate) mod dynamodb;
+pub(crate) mod tab;

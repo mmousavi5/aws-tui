@@ -1,3 +1,9 @@
+use crate::event_managment::event::{Event, TabEvent, WidgetActions, WidgetEventType, WidgetType};
+use crate::{
+    event_managment::event::{AWSServiceNavigatorEvent, TabActions},
+    services,
+    widgets::WidgetExt,
+};
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
@@ -5,8 +11,6 @@ use ratatui::{
     style::{Color, Style},
     widgets::{self, Block, BorderType, Borders, Clear, Paragraph, Widget},
 };
-use crate::{event_managment::event::{AWSServiceNavigatorEvent, TabActions}, services, widgets::WidgetExt};
-use crate::event_managment::event::{WidgetEventType, Event, TabEvent, WidgetActions, WidgetType};
 use std::any::Any;
 
 #[derive(Clone)]
@@ -50,12 +54,18 @@ impl AWSServiceNavigator {
 
     fn selected_item(&self) -> Option<Event> {
         match &self.content {
-            NavigatorContent::Services(services) => services
-                .get(self.selected_index)
-                .map(|service| Event::Tab(TabEvent::TabActions(TabActions::AWSServiceSelected(service.clone())))),
-            NavigatorContent::Records(records) => records
-                .get(self.selected_index)
-                .map(|record| Event::Tab(TabEvent::TabActions(TabActions::AWSServiceSelected(WidgetEventType::RecordSelected(record.clone()))))),
+            NavigatorContent::Services(services) => {
+                services.get(self.selected_index).map(|service| {
+                    Event::Tab(TabEvent::TabActions(TabActions::AWSServiceSelected(
+                        service.clone(),
+                    )))
+                })
+            }
+            NavigatorContent::Records(records) => records.get(self.selected_index).map(|record| {
+                Event::Tab(TabEvent::TabActions(TabActions::AWSServiceSelected(
+                    WidgetEventType::RecordSelected(record.clone()),
+                )))
+            }),
         }
     }
 
@@ -93,12 +103,7 @@ impl WidgetExt for AWSServiceNavigator {
 
         outer_block.render(area, buf);
 
-        let inner_area = Rect::new(
-            area.x + 2,
-            area.y + 2,
-            area.width - 4,
-            area.height - 4,
-        );
+        let inner_area = Rect::new(area.x + 2, area.y + 2, area.width - 4, area.height - 4);
 
         inner_block.render(inner_area, buf);
 
@@ -136,18 +141,26 @@ impl WidgetExt for AWSServiceNavigator {
                 .join("\n"),
         };
 
-        let paragraph = Paragraph::new(content_text)
-            .alignment(Alignment::Left);
+        let paragraph = Paragraph::new(content_text).alignment(Alignment::Left);
 
         paragraph.render(text_area, buf);
     }
 
     fn handle_input(&mut self, key_event: KeyEvent) -> Option<WidgetActions> {
         match key_event.code {
-            KeyCode::Up => Some(WidgetActions::AWSServiceNavigatorEvent(AWSServiceNavigatorEvent::ArrowUp, self.widget_type.clone())),
-            KeyCode::Down => Some(WidgetActions::AWSServiceNavigatorEvent(AWSServiceNavigatorEvent::ArrowDown, self.widget_type.clone())),
-            KeyCode::Enter => Some(WidgetActions::AWSServiceNavigatorEvent(AWSServiceNavigatorEvent::Enter, self.widget_type.clone())),
-            _ => None
+            KeyCode::Up => Some(WidgetActions::AWSServiceNavigatorEvent(
+                AWSServiceNavigatorEvent::ArrowUp,
+                self.widget_type.clone(),
+            )),
+            KeyCode::Down => Some(WidgetActions::AWSServiceNavigatorEvent(
+                AWSServiceNavigatorEvent::ArrowDown,
+                self.widget_type.clone(),
+            )),
+            KeyCode::Enter => Some(WidgetActions::AWSServiceNavigatorEvent(
+                AWSServiceNavigatorEvent::Enter,
+                self.widget_type.clone(),
+            )),
+            _ => None,
         }
     }
 

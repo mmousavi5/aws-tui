@@ -1,9 +1,9 @@
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use thiserror::Error;
+use tokio::sync::Mutex;
 
-use super::s3_client::{S3Client, S3ClientError};
 use super::dynamo_client::{DynamoDBClient, DynamoDBClientError};
+use super::s3_client::{S3Client, S3ClientError};
 
 #[derive(Error, Debug)]
 pub enum TabClientsError {

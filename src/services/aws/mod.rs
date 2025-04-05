@@ -4,9 +4,9 @@ mod tab_clients;
 
 pub use tab_clients::{TabClients, TabClientsError};
 
-use thiserror::Error;
 use super::aws::dynamo_client::DynamoDBClientError;
 use super::aws::s3_client::S3ClientError;
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ClientError {

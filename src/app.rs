@@ -1,12 +1,11 @@
+use crate::components::tab::Tab;
 use crate::event_managment::event::{AppEvent, Event, EventHandler, TabActions};
+use crate::event_managment::event::{TabEvent, WidgetActions, WidgetEventType};
 use crossterm::event;
 use ratatui::{
     DefaultTerminal,
     crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
 };
-use crate::components::tab::Tab;
-use crate::event_managment::event::{WidgetEventType, TabEvent, WidgetActions};
-
 
 /// Application.
 pub struct App {
@@ -20,7 +19,6 @@ pub struct App {
     pub active_tab: usize, // Track the active tab
     ///
     pub tabs: Vec<Tab>,
-
 }
 
 impl Default for App {
@@ -86,7 +84,7 @@ impl App {
                 if let Some(tab) = self.tabs.get_mut(self.active_tab) {
                     tab.handle_input(key_event);
                 }
-            },
+            }
         }
         Ok(())
     }
@@ -95,7 +93,11 @@ impl App {
         match app_state {
             AppEvent::NextTab => self.next_tab(),
             AppEvent::CreateTab => {
-                self.tabs.push(Tab::new("New Tab", "This is a new tab.", self.events.sender.clone()));
+                self.tabs.push(Tab::new(
+                    "New Tab",
+                    "This is a new tab.",
+                    self.events.sender.clone(),
+                ));
             }
             AppEvent::CloseTab => {
                 if self.tabs.len() > 1 {
@@ -116,7 +118,6 @@ impl App {
             tab.process_event(tab_event);
         }
     }
-
 
     /// Handles the tick event of the terminal.
     ///
@@ -164,4 +165,3 @@ impl App {
     //     }
     // }
 }
- 

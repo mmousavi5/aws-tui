@@ -1,17 +1,20 @@
+use crate::event_managment::event::{Event, InputBoxEvent, WidgetActions};
+use crate::{
+    event_managment::event::{ComponentActions, TabEvent},
+    widgets::WidgetExt,
+};
+use clipboard::{ClipboardContext, ClipboardProvider};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::layout::Alignment;
+use ratatui::widgets::{Borders, Wrap};
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    widgets::{Block, BorderType, Paragraph, Widget},
-    style::{Style, Color},
+    style::{Color, Style},
     text::Line,
+    widgets::{Block, BorderType, Paragraph, Widget},
 };
-use ratatui::layout::Alignment;
-use ratatui::widgets::{Borders, Wrap};
-use crate::{event_managment::event::{ComponentActions, TabEvent}, widgets::WidgetExt};
 use std::any::Any;
-use crate::event_managment::event::{WidgetActions, InputBoxEvent, Event};
-use clipboard::{ClipboardContext, ClipboardProvider};
 
 pub struct InputBoxWidget {
     content: String,
@@ -21,11 +24,14 @@ pub struct InputBoxWidget {
     title: String,
     event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
     clipboard: Option<ClipboardContext>,
-
 }
 
 impl InputBoxWidget {
-    pub fn new(title: &str, active: bool, event_sender: tokio::sync::mpsc::UnboundedSender<Event>    ) -> Self {
+    pub fn new(
+        title: &str,
+        active: bool,
+        event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
+    ) -> Self {
         Self {
             content: String::new(),
             cursor_position: 0,
@@ -34,7 +40,6 @@ impl InputBoxWidget {
             title: title.to_string(),
             event_sender,
             clipboard: ClipboardProvider::new().ok(),
-
         }
     }
 
@@ -89,27 +94,32 @@ impl WidgetExt for InputBoxWidget {
         paragraph.render(area, buf);
     }
 
-    fn handle_input(&mut self, key_event: KeyEvent)  -> Option<WidgetActions>  {
+    fn handle_input(&mut self, key_event: KeyEvent) -> Option<WidgetActions> {
         // if !self.active {
         //     return;
         // }
         match key_event.code {
-            KeyCode::Char('v')  if key_event.modifiers == KeyModifiers::CONTROL => {
+            KeyCode::Char('v') if key_event.modifiers == KeyModifiers::CONTROL => {
                 self.paste_from_clipboard();
-                Some(WidgetActions::InputBoxEvent(InputBoxEvent::Written(self.content.clone())))
+                Some(WidgetActions::InputBoxEvent(InputBoxEvent::Written(
+                    self.content.clone(),
+                )))
             }
-            KeyCode::Char('c')  if key_event.modifiers == KeyModifiers::CONTROL => {
+            KeyCode::Char('c') if key_event.modifiers == KeyModifiers::CONTROL => {
                 self.copy_to_clipboard();
-                Some(WidgetActions::InputBoxEvent(InputBoxEvent::Written(self.content.clone())))
+                Some(WidgetActions::InputBoxEvent(InputBoxEvent::Written(
+                    self.content.clone(),
+                )))
             }
-            KeyCode::Char(ref _c) => Some(WidgetActions::InputBoxEvent(InputBoxEvent::KeyPress(key_event))),
+            KeyCode::Char(ref _c) => Some(WidgetActions::InputBoxEvent(InputBoxEvent::KeyPress(
+                key_event,
+            ))),
             KeyCode::Backspace => Some(WidgetActions::InputBoxEvent(InputBoxEvent::Backspace)),
             KeyCode::Delete => Some(WidgetActions::InputBoxEvent(InputBoxEvent::Delete)),
             KeyCode::Left => Some(WidgetActions::InputBoxEvent(InputBoxEvent::Left)),
             KeyCode::Enter => Some(WidgetActions::InputBoxEvent(InputBoxEvent::Enter)),
 
-            _ => None
-            
+            _ => None,
         }
     }
 
@@ -133,7 +143,6 @@ impl WidgetExt for InputBoxWidget {
         self
     }
     fn process_event(&mut self, event: WidgetActions) {
-
         match event {
             WidgetActions::InputBoxEvent(input_event) => match input_event {
                 InputBoxEvent::KeyPress(key_event) => {
@@ -161,13 +170,18 @@ impl WidgetExt for InputBoxWidget {
                 InputBoxEvent::Enter => {
                     // Handle enter key event
                     // For example, you can send the content to an event sender or process it
-                    self.event_sender.send(Event::Tab(TabEvent::ComponentActions((ComponentActions::WidgetActions(WidgetActions::InputBoxEvent(InputBoxEvent::Written(self.content.clone()))))))).unwrap();
+                    self.event_sender
+                        .send(Event::Tab(TabEvent::ComponentActions(
+                            (ComponentActions::WidgetActions(WidgetActions::InputBoxEvent(
+                                InputBoxEvent::Written(self.content.clone()),
+                            ))),
+                        )))
+                        .unwrap();
                 }
                 _ => {}
             },
             _ => {}
         }
-        
     }
     fn is_active(&self) -> bool {
         self.active

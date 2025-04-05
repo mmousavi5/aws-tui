@@ -1,17 +1,13 @@
-
 // pub(crate) mod paragraph;
-pub(crate) mod popup;
 pub(crate) mod aws_service_navigator;
 pub(crate) mod input_box;
+pub(crate) mod popup;
 // pub(crate) mod input_box;
+use crate::event_managment::event::{Event, WidgetActions};
 use std::any::Any;
-use crate::event_managment::event::{WidgetActions, Event};
 
 use futures::channel;
-use ratatui::{
-    buffer::Buffer,
-    layout::Rect,
-};
+use ratatui::{buffer::Buffer, layout::Rect};
 pub trait WidgetExt {
     fn render(&self, area: Rect, buf: &mut Buffer);
     fn handle_input(&mut self, key_event: crossterm::event::KeyEvent) -> Option<WidgetActions>;

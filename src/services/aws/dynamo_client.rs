@@ -1,7 +1,7 @@
-use aws_config::{defaults, BehaviorVersion, Region};
-use aws_sdk_dynamodb::{Client, Error as DynamoDBError};
+use aws_config::{BehaviorVersion, Region, defaults};
 use aws_sdk_dynamodb::error::SdkError;
 use aws_sdk_dynamodb::operation::list_tables::ListTablesError;
+use aws_sdk_dynamodb::{Client, Error as DynamoDBError};
 use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
 use thiserror::Error;
 
@@ -24,8 +24,8 @@ impl DynamoDBClient {
             .region(Region::new(region))
             .load()
             .await;
-        Ok(Self { 
-            client: Client::new(&config) 
+        Ok(Self {
+            client: Client::new(&config),
         })
     }
 

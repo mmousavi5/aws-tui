@@ -1,9 +1,9 @@
 use color_eyre::eyre::OptionExt;
 use futures::{FutureExt, StreamExt};
 use ratatui::crossterm::event::Event as CrosstermEvent;
+use ratatui::crossterm::event::KeyEvent;
 use std::time::Duration;
 use tokio::sync::mpsc;
-use ratatui::crossterm::event:: KeyEvent;
 /// The frequency at which tick events are emitted.
 const TICK_FPS: f64 = 30.0;
 
@@ -26,7 +26,6 @@ pub enum Event {
     App(AppEvent),
     /// Tab events.
     Tab(TabEvent),
-
 }
 
 #[derive(Clone)]
@@ -59,7 +58,6 @@ pub enum TabActions {
     ProfileSelected(String),
     AWSServiceSelected(WidgetEventType),
 }
-
 
 #[derive(Clone)]
 pub enum PopupEvent {
@@ -103,15 +101,13 @@ pub enum ParagraphEvent {
     Cancel,
 }
 
-
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum WidgetEventType {
     /// AWS profile event.
     S3,
     /// Active tab event.
     DynamoDB,
-    RecordSelected(String),  // Add this new variant
-
+    RecordSelected(String), // Add this new variant
 }
 
 impl WidgetEventType {
@@ -124,7 +120,6 @@ impl std::fmt::Display for WidgetEventType {
             WidgetEventType::S3 => write!(f, "S3"),
             WidgetEventType::DynamoDB => write!(f, "DynamoDB"),
             WidgetEventType::RecordSelected(record) => write!(f, "{}", record),
-
         }
     }
 }

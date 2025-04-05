@@ -1,25 +1,23 @@
+use crate::{
+    event_managment::event::{AppEvent, Event, PopupEvent, TabActions, TabEvent, WidgetActions},
+    services::read_config,
+    widgets::WidgetExt,
+};
 use aws_config::profile;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
-    layout::Rect,
-    widgets::{Block, BorderType, Paragraph, Widget, Clear},
-    style::{Style, Color},
     layout::Alignment,
+    layout::Rect,
+    style::{Color, Style},
     text::Line,
-};
-use crate::{
-    widgets::WidgetExt,
-    event_managment::event::{AppEvent, Event, WidgetActions, TabEvent, PopupEvent, TabActions},
-    services::read_config,
+    widgets::{Block, BorderType, Clear, Paragraph, Widget},
 };
 use std::any::Any;
 
 const POPUP_MARGIN: u16 = 5;
 const MIN_POPUP_WIDTH: u16 = 20;
 const MIN_POPUP_HEIGHT: u16 = 10;
-
-
 
 #[derive(Debug)]
 pub struct PopupWidget {
@@ -34,13 +32,13 @@ pub struct PopupWidget {
 
 impl PopupWidget {
     pub fn new(
-        title: &str, 
-        active: bool, 
-        event_sender: tokio::sync::mpsc::UnboundedSender<Event>
+        title: &str,
+        active: bool,
+        event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
     ) -> Self {
         let profiles = read_config::get_aws_profiles()
             .unwrap_or_else(|_| vec!["No profiles found".to_string()]);
-            
+
         Self {
             title: title.to_string(),
             profile_name: None,
@@ -171,7 +169,9 @@ impl WidgetExt for PopupWidget {
                 PopupEvent::Enter => {
                     if let Some(profile) = self.profile_list.get(self.selected_index) {
                         self.profile_name = Some(profile.clone());
-                        if let Err(e) = self.event_sender.send(Event::Tab(TabEvent::TabActions(TabActions::ProfileSelected(self.profile_name.clone().unwrap())))) {
+                        if let Err(e) = self.event_sender.send(Event::Tab(TabEvent::TabActions(
+                            TabActions::ProfileSelected(self.profile_name.clone().unwrap()),
+                        ))) {
                             eprintln!("Failed to send profile selected event: {}", e);
                         }
                     }
