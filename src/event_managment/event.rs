@@ -90,6 +90,7 @@ pub enum InputBoxEvent {
     Delete,
     Left,
     Right,
+    Written(String),
     KeyPress(KeyEvent),
 }
 

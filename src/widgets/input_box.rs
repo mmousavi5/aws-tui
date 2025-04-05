@@ -1,4 +1,4 @@
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -8,9 +8,10 @@ use ratatui::{
 };
 use ratatui::layout::Alignment;
 use ratatui::widgets::{Borders, Wrap};
-use crate::widgets::WidgetExt;
+use crate::{event_managment::event::{ComponentActions, TabEvent}, widgets::WidgetExt};
 use std::any::Any;
-use crate::event_managment::event::{WidgetActions, InputBoxEvent};
+use crate::event_managment::event::{WidgetActions, InputBoxEvent, Event};
+use clipboard::{ClipboardContext, ClipboardProvider};
 
 pub struct InputBoxWidget {
     content: String,
@@ -18,21 +19,41 @@ pub struct InputBoxWidget {
     active: bool,
     visible: bool,
     title: String,
+    event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
+    clipboard: Option<ClipboardContext>,
+
 }
 
 impl InputBoxWidget {
-    pub fn new(title: &str, active: bool) -> Self {
+    pub fn new(title: &str, active: bool, event_sender: tokio::sync::mpsc::UnboundedSender<Event>    ) -> Self {
         Self {
             content: String::new(),
             cursor_position: 0,
             active,
             visible: true,
             title: title.to_string(),
+            event_sender,
+            clipboard: ClipboardProvider::new().ok(),
+
         }
     }
 
     pub fn get_content(&self) -> &str {
         &self.content
+    }
+    fn paste_from_clipboard(&mut self) {
+        if let Some(ref mut ctx) = self.clipboard {
+            if let Ok(contents) = ctx.get_contents() {
+                self.content.insert_str(self.cursor_position, &contents);
+                self.cursor_position += contents.len();
+            }
+        }
+    }
+
+    fn copy_to_clipboard(&mut self) {
+        if let Some(ref mut ctx) = self.clipboard {
+            let _ = ctx.set_contents(self.content.clone());
+        }
     }
 }
 
@@ -73,10 +94,20 @@ impl WidgetExt for InputBoxWidget {
         //     return;
         // }
         match key_event.code {
+            KeyCode::Char('v')  if key_event.modifiers == KeyModifiers::CONTROL => {
+                self.paste_from_clipboard();
+                Some(WidgetActions::InputBoxEvent(InputBoxEvent::Written(self.content.clone())))
+            }
+            KeyCode::Char('c')  if key_event.modifiers == KeyModifiers::CONTROL => {
+                self.copy_to_clipboard();
+                Some(WidgetActions::InputBoxEvent(InputBoxEvent::Written(self.content.clone())))
+            }
             KeyCode::Char(ref _c) => Some(WidgetActions::InputBoxEvent(InputBoxEvent::KeyPress(key_event))),
             KeyCode::Backspace => Some(WidgetActions::InputBoxEvent(InputBoxEvent::Backspace)),
             KeyCode::Delete => Some(WidgetActions::InputBoxEvent(InputBoxEvent::Delete)),
             KeyCode::Left => Some(WidgetActions::InputBoxEvent(InputBoxEvent::Left)),
+            KeyCode::Enter => Some(WidgetActions::InputBoxEvent(InputBoxEvent::Enter)),
+
             _ => None
             
         }
@@ -126,6 +157,11 @@ impl WidgetExt for InputBoxWidget {
                     if self.cursor_position > 0 {
                         self.cursor_position -= 1;
                     }
+                }
+                InputBoxEvent::Enter => {
+                    // Handle enter key event
+                    // For example, you can send the content to an event sender or process it
+                    self.event_sender.send(Event::Tab(TabEvent::ComponentActions((ComponentActions::WidgetActions(WidgetActions::InputBoxEvent(InputBoxEvent::Written(self.content.clone()))))))).unwrap();
                 }
                 _ => {}
             },

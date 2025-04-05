@@ -5,9 +5,12 @@ use ratatui::{
     layout::{Layout, Direction, Constraint, Rect},
     widgets::Widget,
 };
-use crate::event_managment::event::{Event, WidgetActions, ComponentActions, TabEvent, WidgetType};
+use crate::event_managment::event::{Event, WidgetActions, ComponentActions, TabEvent, WidgetType, InputBoxEvent};
 use crate::widgets::WidgetExt;
 use crossterm::event::{KeyCode, KeyEvent};
+use crate::services::aws::s3_client::{self, S3Client};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ComponentFocus {
@@ -25,10 +28,11 @@ pub struct DynamoDB {
     visible: bool,
     event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
     current_focus: ComponentFocus,
+    s3_client: Arc<Mutex<S3Client>>,
 }
 
 impl DynamoDB {
-    pub fn new(event_sender: tokio::sync::mpsc::UnboundedSender<Event>) -> Self {
+    pub fn new(event_sender: tokio::sync::mpsc::UnboundedSender<Event>, s3_client: Arc<Mutex<S3Client>>) -> Self {
         Self {
             table_list_navigator: AWSServiceNavigator::new(
                 WidgetType::AWSServiceNavigator,
@@ -36,7 +40,7 @@ impl DynamoDB {
                 event_sender.clone(),
                 NavigatorContent::Records(vec!["DynamoDB".to_string(), "S3".to_string(), "Lambda".to_string()]),
             ),
-            query_input: InputBoxWidget::new("Query Input", false),
+            query_input: InputBoxWidget::new("Query Input", false, event_sender.clone()),
             query_results_navigator: AWSServiceNavigator::new(
                 WidgetType::QueryResultsNavigator,
                 false,
@@ -47,6 +51,7 @@ impl DynamoDB {
             visible: true,
             event_sender,
             current_focus: ComponentFocus::Navigation,
+            s3_client,
         }
     }
 
@@ -152,6 +157,10 @@ impl DynamoDB {
                         } else if widget_type == WidgetType::QueryResultsNavigator {
                             self.query_results_navigator.process_event(widget_action.clone());
                         }
+                    }
+                    WidgetActions::InputBoxEvent(InputBoxEvent::Written(content)) => {
+                        let content_vec: Vec<String> = content.lines().map(|line| line.to_string()).collect();
+                        self.query_results_navigator.set_content(NavigatorContent::Records(content_vec));
                     }
                     WidgetActions::InputBoxEvent(ref _input_box_event) => {
                         self.query_input.process_event(widget_action);
