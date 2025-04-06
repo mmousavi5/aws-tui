@@ -1,6 +1,6 @@
 use crate::components::tab::Tab;
-use crate::event_managment::event::{AppEvent, Event, EventHandler};
 use crate::event_managment::event::TabEvent;
+use crate::event_managment::event::{AppEvent, Event, EventHandler};
 use ratatui::{
     DefaultTerminal,
     crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
@@ -67,18 +67,22 @@ impl App {
     /// Handles the key events and updates the state of [`App`].
     pub fn handle_key_events(&mut self, key_event: KeyEvent) -> color_eyre::Result<()> {
         match key_event.code {
-            KeyCode::Esc | KeyCode::Char('q') => self.events.send(Event::App(AppEvent::Quit)),
-            KeyCode::Char('c' | 'C') if key_event.modifiers == KeyModifiers::CONTROL => {
-                self.events.send(Event::App(AppEvent::Quit))
+            // Mac-style shortcuts (Command/⌘ is mapped to CONTROL in terminal apps)
+            KeyCode::Char('w') if key_event.modifiers == KeyModifiers::CONTROL => {
+                self.events.send(Event::App(AppEvent::CloseTab)) // ⌘+W to close tab
             }
-            KeyCode::Char('t' | 'T') if key_event.modifiers == KeyModifiers::CONTROL => {
-                self.events.send(Event::App(AppEvent::CreateTab))
+            KeyCode::Char('t') if key_event.modifiers == KeyModifiers::CONTROL => {
+                self.events.send(Event::App(AppEvent::CreateTab)) // ⌘+T for new tab
             }
-            KeyCode::Char('w' | 'W') if key_event.modifiers == KeyModifiers::CONTROL => {
-                self.events.send(Event::App(AppEvent::CloseTab))
+            KeyCode::Tab if key_event.modifiers == KeyModifiers::CONTROL => {
+                self.events.send(Event::App(AppEvent::NextTab)) // ⌘+Tab to switch tabs
             }
-            KeyCode::Tab => self.events.send(Event::App(AppEvent::NextTab)),
-            // Other handlers you could add here.
+            KeyCode::Tab if key_event.modifiers == KeyModifiers::CONTROL | KeyModifiers::SHIFT => {
+                self.events.send(Event::App(AppEvent::PreviousTab)) // ⌘+Shift+Tab to switch tabs backwards
+            }
+            KeyCode::Char('q') if key_event.modifiers == KeyModifiers::CONTROL => {
+                self.events.send(Event::App(AppEvent::Quit)) // ⌘+Q to quit
+            }
             _ => {
                 if let Some(tab) = self.tabs.get_mut(self.active_tab) {
                     tab.handle_input(key_event);
@@ -105,6 +109,7 @@ impl App {
                 }
             }
             AppEvent::Quit => self.quit(),
+            _ => {}
         }
     }
 
@@ -134,5 +139,4 @@ impl App {
         // self.tabs[self.active_tab].show_popup = false;
         self.active_tab = (self.active_tab + 1) % self.tabs.len();
     }
-
 }

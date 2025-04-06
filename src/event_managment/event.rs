@@ -40,6 +40,7 @@ pub enum ComponentActions {
     ArrowUp,
     ArrowDown,
     NextFocus,
+    PreviousFocus,
     SetTitle(String),
     SetQuery(String),
     PopupDetails(String),
@@ -58,6 +59,7 @@ pub enum WidgetActions {
 #[derive(Clone, Debug)]
 pub enum TabActions {
     NextFocus,
+    PreviousFocus,
     ProfileSelected(String),
     AWSServiceSelected(WidgetEventType),
 }
@@ -135,6 +137,8 @@ impl std::fmt::Display for WidgetEventType {
 pub enum AppEvent {
     /// Switch to the next tab.
     NextTab,
+    /// Switch to the previous tab.
+    PreviousTab,
     /// Create a new tab.
     CreateTab,
     /// Close the current tab.

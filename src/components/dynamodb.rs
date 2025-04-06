@@ -1,22 +1,21 @@
+use crate::event_managment::event::{AWSServiceNavigatorEvent, PopupEvent, WidgetEventType};
 use crate::event_managment::event::{
     ComponentActions, Event, InputBoxEvent, TabEvent, WidgetActions, WidgetType,
 };
-use crate::services::aws::s3_client::S3Client;
 use crate::services::aws::dynamo_client::DynamoDBClient;
+use crate::services::aws::s3_client::S3Client;
 use crate::widgets::WidgetExt;
 use crate::widgets::aws_service_navigator::{AWSServiceNavigator, NavigatorContent};
 use crate::widgets::input_box::InputBoxWidget;
-use crossterm::event::{KeyCode, KeyEvent};
+use crate::widgets::popup::{PopupContent, PopupWidget};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
     widgets::Widget,
 };
-use crate::event_managment::event::{AWSServiceNavigatorEvent, WidgetEventType, PopupEvent};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use crate::widgets::popup::{PopupWidget, PopupContent};
-
 
 const TAB_HEIGHT: u16 = 3;
 const POPUP_PADDING: u16 = 5;
@@ -44,9 +43,7 @@ pub struct DynamoDB {
 }
 
 impl DynamoDB {
-    pub fn new(
-        event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
-    ) -> Self {
+    pub fn new(event_sender: tokio::sync::mpsc::UnboundedSender<Event>) -> Self {
         Self {
             table_list_navigator: AWSServiceNavigator::new(
                 WidgetType::AWSServiceNavigator,
@@ -126,10 +123,9 @@ impl DynamoDB {
         if self.details_popup.is_visible() {
             self.details_popup.render(popup_area, buf);
         }
-
     }
 
-    pub fn handle_input(&mut self, key_event: crossterm::event::KeyEvent) {
+    pub fn handle_input(&mut self, key_event: KeyEvent) {
         if self.details_popup.is_visible() {
             if let Some(signal) = self.details_popup.handle_input(key_event) {
                 self.event_sender
@@ -137,18 +133,48 @@ impl DynamoDB {
                         ComponentActions::WidgetActions(signal),
                     )))
                     .unwrap();
+                return;
             }
         }
+
         match key_event.code {
-            KeyCode::Char('t') => {
+            // Standard Mac navigation
+            KeyCode::Tab => {
                 self.event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
                         ComponentActions::NextFocus,
                     )))
                     .unwrap();
             }
+            KeyCode::BackTab => {
+                // Shift+Tab
+                self.event_sender
+                    .send(Event::Tab(TabEvent::ComponentActions(
+                        ComponentActions::PreviousFocus,
+                    )))
+                    .unwrap();
+            }
+            // Quick navigation with Option/Alt key (⌥)
+            KeyCode::Char('1') if key_event.modifiers == KeyModifiers::ALT => {
+                self.current_focus = ComponentFocus::Navigation;
+                self.update_widget_states();
+            }
+            KeyCode::Char('2') if key_event.modifiers == KeyModifiers::ALT => {
+                self.current_focus = ComponentFocus::Input;
+                self.update_widget_states();
+            }
+            KeyCode::Char('3') if key_event.modifiers == KeyModifiers::ALT => {
+                self.current_focus = ComponentFocus::Results;
+                self.update_widget_states();
+            }
+            // Escape to return to navigation
+            KeyCode::Esc => {
+                if self.current_focus != ComponentFocus::Navigation {
+                    self.current_focus = ComponentFocus::Navigation;
+                    self.update_widget_states();
+                }
+            }
             _ => {
-                // Handle other inputs based on current focus
                 if let Some(signal) = match self.current_focus {
                     ComponentFocus::Navigation => self.table_list_navigator.handle_input(key_event),
                     ComponentFocus::Input => self.query_input.handle_input(key_event),
@@ -180,6 +206,7 @@ impl DynamoDB {
 
     pub fn set_active(&mut self, active: bool) {
         self.active = active;
+        self.update_widget_states();
     }
 
     fn set_inactive(&mut self) {
@@ -205,7 +232,8 @@ impl DynamoDB {
             ComponentActions::SetQuery(query) => {
                 self.query_results_navigator.set_title(query.clone());
                 self.selected_query = Some(query.clone());
-                let content = self.dynamodb_client
+                let content = self
+                    .dynamodb_client
                     .as_ref()
                     .unwrap()
                     .lock()
@@ -217,7 +245,8 @@ impl DynamoDB {
                     .set_content(NavigatorContent::Records(content));
             }
             ComponentActions::PopupDetails(title) => {
-                self.details_popup.set_profile_list(PopupContent::Details(title.clone()));
+                self.details_popup
+                    .set_profile_list(PopupContent::Details(title.clone()));
                 self.details_popup.set_visible(true);
                 self.details_popup.set_active(true);
             }
@@ -228,52 +257,47 @@ impl DynamoDB {
             ComponentActions::WidgetActions(widget_action) => match widget_action {
                 WidgetActions::AWSServiceNavigatorEvent(ref _aws_navigator_event, widget_type) => {
                     if widget_type == WidgetType::AWSServiceNavigator {
-                        
-                        if let Some(signal) = self.table_list_navigator
-                            .process_event(widget_action.clone()) {
-                                match signal {
-                                    WidgetActions::AWSServiceNavigatorEvent(
-                                        AWSServiceNavigatorEvent::SelectedItem(WidgetEventType::RecordSelected(
-                                            title,
-                                        )),
-                                        WidgetType::AWSServiceNavigator,
-                                    ) => {
-                                        self.event_sender
-                                            .send(Event::Tab(TabEvent::ComponentActions(
-                                                ComponentActions::SetTitle(
-                                                    title.clone(),
-                                                ),
-                                            )))
-                                            .unwrap();
-                                    }
-                                    _ => {}
-                                    
+                        if let Some(signal) = self
+                            .table_list_navigator
+                            .process_event(widget_action.clone())
+                        {
+                            match signal {
+                                WidgetActions::AWSServiceNavigatorEvent(
+                                    AWSServiceNavigatorEvent::SelectedItem(
+                                        WidgetEventType::RecordSelected(title),
+                                    ),
+                                    WidgetType::AWSServiceNavigator,
+                                ) => {
+                                    self.event_sender
+                                        .send(Event::Tab(TabEvent::ComponentActions(
+                                            ComponentActions::SetTitle(title.clone()),
+                                        )))
+                                        .unwrap();
                                 }
+                                _ => {}
                             }
-
-
+                        }
                     } else if widget_type == WidgetType::QueryResultsNavigator {
-                        if let Some(signal) = self.query_results_navigator
-                            .process_event(widget_action.clone()){
-                                match signal {
-                                    WidgetActions::AWSServiceNavigatorEvent(
-                                        AWSServiceNavigatorEvent::SelectedItem(WidgetEventType::RecordSelected(
-                                            title,
-                                        )),
-                                        WidgetType::QueryResultsNavigator,
-                                    ) => {
-                                        self.event_sender
-                                            .send(Event::Tab(TabEvent::ComponentActions(
-                                                ComponentActions::PopupDetails(
-                                                    title.clone(),
-                                                ),
-                                            )))
-                                            .unwrap();
-                                    }
-                                    _ => {}
+                        if let Some(signal) = self
+                            .query_results_navigator
+                            .process_event(widget_action.clone())
+                        {
+                            match signal {
+                                WidgetActions::AWSServiceNavigatorEvent(
+                                    AWSServiceNavigatorEvent::SelectedItem(
+                                        WidgetEventType::RecordSelected(title),
+                                    ),
+                                    WidgetType::QueryResultsNavigator,
+                                ) => {
+                                    self.event_sender
+                                        .send(Event::Tab(TabEvent::ComponentActions(
+                                            ComponentActions::PopupDetails(title.clone()),
+                                        )))
+                                        .unwrap();
                                 }
-
+                                _ => {}
                             }
+                        }
                     }
                 }
                 WidgetActions::InputBoxEvent(InputBoxEvent::Written(content)) => {
@@ -287,7 +311,7 @@ impl DynamoDB {
                     self.details_popup.set_active(false);
                 }
                 WidgetActions::InputBoxEvent(ref _input_box_event) => {
-                    if let Some(signal) = self.query_input.process_event(widget_action){
+                    if let Some(signal) = self.query_input.process_event(widget_action) {
                         match signal {
                             WidgetActions::InputBoxEvent(InputBoxEvent::Written(content)) => {
                                 self.event_sender
@@ -295,7 +319,7 @@ impl DynamoDB {
                                         ComponentActions::SetQuery(content),
                                     )))
                                     .unwrap();
-                                }
+                            }
                             _ => {}
                         }
                     }
@@ -333,7 +357,8 @@ impl DynamoDB {
         if let Some(client) = &self.dynamodb_client {
             let client = client.lock().await;
             let tables = client.list_tables().await?;
-            self.table_list_navigator.set_content(NavigatorContent::Records(tables));
+            self.table_list_navigator
+                .set_content(NavigatorContent::Records(tables));
         }
         Ok(())
     }

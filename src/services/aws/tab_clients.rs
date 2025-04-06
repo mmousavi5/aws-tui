@@ -60,7 +60,9 @@ impl TabClients {
         Ok(self.s3_client.as_ref().unwrap().clone())
     }
 
-    pub async fn get_dynamodb_client(&mut self) -> Result<Arc<Mutex<DynamoDBClient>>, TabClientsError> {
+    pub async fn get_dynamodb_client(
+        &mut self,
+    ) -> Result<Arc<Mutex<DynamoDBClient>>, TabClientsError> {
         if self.dynamodb_client.is_none() {
             let client = DynamoDBClient::new(self.profile.clone(), self.region.clone()).await?;
             self.dynamodb_client = Some(Arc::new(Mutex::new(client)));

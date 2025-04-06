@@ -59,16 +59,16 @@ impl AWSServiceNavigator {
                 services.get(self.selected_index).map(|service| {
                     WidgetActions::AWSServiceNavigatorEvent(
                         AWSServiceNavigatorEvent::SelectedItem(service.clone()),
-                        self.widget_type
+                        self.widget_type,
                     )
                 })
             }
             NavigatorContent::Records(records) => records.get(self.selected_index).map(|record| {
                 WidgetActions::AWSServiceNavigatorEvent(
-                    AWSServiceNavigatorEvent::SelectedItem(
-                        WidgetEventType::RecordSelected(record.clone())
-                    ),
-                    self.widget_type
+                    AWSServiceNavigatorEvent::SelectedItem(WidgetEventType::RecordSelected(
+                        record.clone(),
+                    )),
+                    self.widget_type,
                 )
             }),
         }
@@ -190,7 +190,7 @@ impl WidgetExt for AWSServiceNavigator {
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
-    fn process_event(&mut self, event: WidgetActions)  -> Option<WidgetActions>{
+    fn process_event(&mut self, event: WidgetActions) -> Option<WidgetActions> {
         match event {
             WidgetActions::AWSServiceNavigatorEvent(event, _) => match event {
                 AWSServiceNavigatorEvent::ArrowUp => {
@@ -205,16 +205,14 @@ impl WidgetExt for AWSServiceNavigator {
                     }
                     None
                 }
-                AWSServiceNavigatorEvent::Enter => {
-                    self.selected_item()
-                }
+                AWSServiceNavigatorEvent::Enter => self.selected_item(),
                 AWSServiceNavigatorEvent::Escape => {
                     self.set_visible(false);
                     None
                 }
-                _ => {None}
+                _ => None,
             },
-            _ => {None}
+            _ => None,
         }
     }
     fn is_active(&self) -> bool {

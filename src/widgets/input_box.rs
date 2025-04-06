@@ -142,7 +142,7 @@ impl WidgetExt for InputBoxWidget {
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
-    fn process_event(&mut self, event: WidgetActions)  -> Option<WidgetActions> {
+    fn process_event(&mut self, event: WidgetActions) -> Option<WidgetActions> {
         match event {
             WidgetActions::InputBoxEvent(input_event) => match input_event {
                 InputBoxEvent::KeyPress(key_event) => {
@@ -174,11 +174,13 @@ impl WidgetExt for InputBoxWidget {
                 InputBoxEvent::Enter => {
                     // Handle enter key event
                     // For example, you can send the content to an event sender or process it
-                    Some(WidgetActions::InputBoxEvent(InputBoxEvent::Written(self.content.clone())))
+                    Some(WidgetActions::InputBoxEvent(InputBoxEvent::Written(
+                        self.content.clone(),
+                    )))
                 }
-                _ => {None}
+                _ => None,
             },
-            _ => {None}
+            _ => None,
         }
     }
     fn is_active(&self) -> bool {

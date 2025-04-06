@@ -2,7 +2,8 @@ use crate::services::aws::TabClients;
 use crate::{
     components::dynamodb::{ComponentFocus, DynamoDB},
     event_managment::event::{
-        ComponentActions, Event, TabActions, TabEvent, WidgetActions, WidgetEventType, WidgetType,AWSServiceNavigatorEvent,PopupEvent,
+        AWSServiceNavigatorEvent, ComponentActions, Event, PopupEvent, TabActions, TabEvent,
+        WidgetActions, WidgetEventType, WidgetType,
     },
     widgets::{
         WidgetExt,
@@ -86,9 +87,16 @@ impl Tab {
             }
         } else {
             match event.code {
-                KeyCode::Char('t') => {
+                // Use Tab for focus switching (standard macOS behavior)
+                KeyCode::Tab => {
                     self.event_sender
                         .send(Event::Tab(TabEvent::TabActions(TabActions::NextFocus)))
+                        .unwrap();
+                }
+                KeyCode::BackTab => {
+                    // Shift+Tab for reverse focus
+                    self.event_sender
+                        .send(Event::Tab(TabEvent::TabActions(TabActions::PreviousFocus)))
                         .unwrap();
                 }
                 _ => {
@@ -98,7 +106,6 @@ impl Tab {
                                 .send(Event::Tab(TabEvent::WidgetActions(signal)))
                                 .unwrap();
                         }
-                        self.left_widgets.handle_input(event);
                     } else {
                         if let Some(widget) = self.right_widgets.get_mut(&self.active_right_widget)
                         {
@@ -118,9 +125,11 @@ impl Tab {
                 WidgetActions::PopupEvent(ref _popup_event) => {
                     if let Some(popup) = self.popup_widget.as_mut() {
                         if self.popup_mod {
-                            if let Some(signal) = popup.process_event(widget_action){
+                            if let Some(signal) = popup.process_event(widget_action) {
                                 match signal {
-                                    WidgetActions::PopupEvent(PopupEvent::SelectedItem(selected)) => {
+                                    WidgetActions::PopupEvent(PopupEvent::SelectedItem(
+                                        selected,
+                                    )) => {
                                         self.event_sender
                                             .send(Event::Tab(TabEvent::TabActions(
                                                 TabActions::ProfileSelected(selected),
@@ -128,7 +137,6 @@ impl Tab {
                                             .unwrap();
                                     }
                                     _ => {}
-                                    
                                 }
                             }
                         }
@@ -136,19 +144,21 @@ impl Tab {
                 }
                 WidgetActions::AWSServiceNavigatorEvent(ref _aws_navigator_event, _) => {
                     if let Some(signal) = self.left_widgets.process_event(widget_action) {
-                            match signal {
-                                WidgetActions::AWSServiceNavigatorEvent(AWSServiceNavigatorEvent::SelectedItem(selected), widget_type) => {
-                                    self.event_sender
-                                        .send(Event::Tab(TabEvent::TabActions(
-                                            TabActions::AWSServiceSelected(selected),
-                                        )))
-                                        .unwrap();
-                                }
-                                _ => {}
-                                
+                        match signal {
+                            WidgetActions::AWSServiceNavigatorEvent(
+                                AWSServiceNavigatorEvent::SelectedItem(selected),
+                                widget_type,
+                            ) => {
+                                self.event_sender
+                                    .send(Event::Tab(TabEvent::TabActions(
+                                        TabActions::AWSServiceSelected(selected),
+                                    )))
+                                    .unwrap();
                             }
+                            _ => {}
                         }
                     }
+                }
                 _ => {}
             },
             TabEvent::ComponentActions(component_action) => {
@@ -168,7 +178,7 @@ impl Tab {
             TabActions::AWSServiceSelected(service) => {
                 if let Some(widget) = self.right_widgets.get_mut(&self.active_right_widget) {
                     widget.set_client(self.aws_clients.get_dynamodb_client().await.unwrap());
-                    widget.update().await;    
+                    widget.update().await;
                 }
             }
             TabActions::NextFocus => {

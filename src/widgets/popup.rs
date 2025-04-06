@@ -12,8 +12,8 @@ use ratatui::{
     text::Line,
     widgets::{Block, Clear, Paragraph, Widget},
 };
-use std::any::Any;
 use serde_json;
+use std::any::Any;
 
 const POPUP_MARGIN: u16 = 5;
 const MIN_POPUP_WIDTH: u16 = 20;
@@ -124,8 +124,7 @@ impl PopupWidget {
                 match serde_json::from_str::<serde_json::Value>(content) {
                     Ok(json) => {
                         // Pretty print with proper indentation
-                        serde_json::to_string_pretty(&json)
-                            .unwrap_or_else(|_| content.clone())
+                        serde_json::to_string_pretty(&json).unwrap_or_else(|_| content.clone())
                     }
                     Err(_) => content.clone(),
                 }
@@ -199,7 +198,7 @@ impl WidgetExt for PopupWidget {
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
-    fn process_event(&mut self, event: WidgetActions)  -> Option<WidgetActions> {
+    fn process_event(&mut self, event: WidgetActions) -> Option<WidgetActions> {
         match event {
             WidgetActions::PopupEvent(event) => match event {
                 PopupEvent::ArrowUp => {
@@ -227,9 +226,9 @@ impl WidgetExt for PopupWidget {
                     self.set_visible(false);
                     None
                 }
-                _ => {None}
+                _ => None,
             },
-            _ => {None}
+            _ => None,
         }
     }
     fn is_active(&self) -> bool {
