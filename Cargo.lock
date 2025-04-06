@@ -527,6 +527,7 @@ dependencies = [
  "dirs",
  "futures",
  "ratatui",
+ "serde_json",
  "thiserror 1.0.69",
  "tokio",
  "tracing",

@@ -40,6 +40,8 @@ pub enum ComponentActions {
     ArrowUp,
     ArrowDown,
     NextFocus,
+    SetTitle(String),
+    SetQuery(String),
     WidgetActions(WidgetActions),
 }
 

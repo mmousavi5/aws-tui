@@ -12,6 +12,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     widgets::Widget,
 };
+use crate::event_managment::event::{AWSServiceNavigatorEvent, WidgetEventType};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -32,6 +33,8 @@ pub struct DynamoDB {
     event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
     current_focus: ComponentFocus,
     dynamodb_client: Option<Arc<Mutex<DynamoDBClient>>>,
+    selected_table: Option<String>,
+    selected_query: Option<String>,
 }
 
 impl DynamoDB {
@@ -65,6 +68,8 @@ impl DynamoDB {
             event_sender,
             current_focus: ComponentFocus::Navigation,
             dynamodb_client: None,
+            selected_table: None,
+            selected_query: None,
         }
     }
 
@@ -158,10 +163,28 @@ impl DynamoDB {
         self
     }
 
-    pub fn process_event(&mut self, event: ComponentActions) {
+    pub async fn process_event(&mut self, event: ComponentActions) {
         match event {
             ComponentActions::ArrowDown => {}
             ComponentActions::ArrowUp => {}
+            ComponentActions::SetTitle(title) => {
+                self.table_list_navigator.set_title(title.clone());
+                self.selected_table = Some(title);
+            }
+            ComponentActions::SetQuery(query) => {
+                self.query_results_navigator.set_title(query.clone());
+                self.selected_query = Some(query.clone());
+                let content = self.dynamodb_client
+                    .as_ref()
+                    .unwrap()
+                    .lock()
+                    .await
+                    .query_table(self.selected_table.clone().unwrap(), query.clone())
+                    .await
+                    .unwrap();
+                self.query_results_navigator
+                    .set_content(NavigatorContent::Records(content));
+            }
             ComponentActions::NextFocus => {
                 self.focus_next();
                 self.update_widget_states();
@@ -169,8 +192,30 @@ impl DynamoDB {
             ComponentActions::WidgetActions(widget_action) => match widget_action {
                 WidgetActions::AWSServiceNavigatorEvent(ref _aws_navigator_event, widget_type) => {
                     if widget_type == WidgetType::AWSServiceNavigator {
-                        self.table_list_navigator
-                            .process_event(widget_action.clone());
+                        
+                        if let Some(signal) = self.table_list_navigator
+                            .process_event(widget_action.clone()) {
+                                match signal {
+                                    WidgetActions::AWSServiceNavigatorEvent(
+                                        AWSServiceNavigatorEvent::SelectedItem(WidgetEventType::RecordSelected(
+                                            title,
+                                        )),
+                                        WidgetType::AWSServiceNavigator,
+                                    ) => {
+                                        self.event_sender
+                                            .send(Event::Tab(TabEvent::ComponentActions(
+                                                ComponentActions::SetTitle(
+                                                    title.clone(),
+                                                ),
+                                            )))
+                                            .unwrap();
+                                    }
+                                    _ => {}
+                                    
+                                }
+                            }
+
+
                     } else if widget_type == WidgetType::QueryResultsNavigator {
                         self.query_results_navigator
                             .process_event(widget_action.clone());
@@ -183,7 +228,18 @@ impl DynamoDB {
                         .set_content(NavigatorContent::Records(content_vec));
                 }
                 WidgetActions::InputBoxEvent(ref _input_box_event) => {
-                    self.query_input.process_event(widget_action);
+                    if let Some(signal) = self.query_input.process_event(widget_action){
+                        match signal {
+                            WidgetActions::InputBoxEvent(InputBoxEvent::Written(content)) => {
+                                self.event_sender
+                                    .send(Event::Tab(TabEvent::ComponentActions(
+                                        ComponentActions::SetQuery(content),
+                                    )))
+                                    .unwrap();
+                                }
+                            _ => {}
+                        }
+                    }
                 }
                 _ => {}
             },

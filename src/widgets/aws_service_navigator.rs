@@ -19,6 +19,7 @@ pub enum NavigatorContent {
 }
 
 pub struct AWSServiceNavigator {
+    title: String,
     widget_type: WidgetType,
     content: NavigatorContent,
     selected_index: usize,
@@ -35,6 +36,7 @@ impl AWSServiceNavigator {
         content: NavigatorContent,
     ) -> Self {
         Self {
+            title: "AWS Services".to_string(),
             widget_type,
             content,
             selected_index: 0,
@@ -90,7 +92,7 @@ impl WidgetExt for AWSServiceNavigator {
         };
 
         let outer_block = Block::default()
-            .title("AWS Services Panel")
+            .title(self.title.as_str())
             .borders(Borders::ALL)
             .border_type(BorderType::Double)
             .border_style(border_style);
@@ -181,6 +183,9 @@ impl WidgetExt for AWSServiceNavigator {
 
     fn set_visible(&mut self, visible: bool) {
         self.visible = visible;
+    }
+    fn set_title(&mut self, title: String) {
+        self.title = title;
     }
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self

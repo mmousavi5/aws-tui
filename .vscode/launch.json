@@ -1,0 +1,28 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug DynamoDB Client Tests",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=aws-tui"
+                ]
+            },
+            "args": [
+                "tests::test_list_tables",
+                "tests::test_query_table"
+            ],
+            "cwd": "${workspaceFolder}",
+            "program": "${cargo:program}",
+            "env": {
+                "AWS_PROFILE": "default",
+                "AWS_REGION": "eu-west-1"
+            }
+        }
+    ]
+}

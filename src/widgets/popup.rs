@@ -188,4 +188,7 @@ impl WidgetExt for PopupWidget {
     fn is_active(&self) -> bool {
         self.active
     }
+    fn set_title(&mut self, title: String) {
+        todo!()
+    }
 }

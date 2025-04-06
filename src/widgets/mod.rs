@@ -17,4 +17,5 @@ pub trait WidgetExt {
     fn as_any_mut(&mut self) -> &mut dyn Any;
     fn process_event(&mut self, event: WidgetActions) -> Option<WidgetActions>;
     fn is_active(&self) -> bool;
+    fn set_title(&mut self, title: String);
 }

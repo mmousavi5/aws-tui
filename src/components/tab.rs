@@ -152,7 +152,7 @@ impl Tab {
             },
             TabEvent::ComponentActions(component_action) => {
                 if let Some(widget) = self.right_widgets.get_mut(&self.active_right_widget) {
-                    widget.process_event(component_action);
+                    widget.process_event(component_action).await;
                 }
             }
             _ => {}
