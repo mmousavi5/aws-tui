@@ -12,9 +12,14 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     widgets::Widget,
 };
-use crate::event_managment::event::{AWSServiceNavigatorEvent, WidgetEventType};
+use crate::event_managment::event::{AWSServiceNavigatorEvent, WidgetEventType, PopupEvent};
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use crate::widgets::popup::PopupWidget;
+
+
+const TAB_HEIGHT: u16 = 3;
+const POPUP_PADDING: u16 = 5;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ComponentFocus {
@@ -35,6 +40,7 @@ pub struct DynamoDB {
     dynamodb_client: Option<Arc<Mutex<DynamoDBClient>>>,
     selected_table: Option<String>,
     selected_query: Option<String>,
+    details_popup: PopupWidget,
 }
 
 impl DynamoDB {
@@ -63,6 +69,7 @@ impl DynamoDB {
                     "q3".to_string(),
                 ]),
             ),
+            details_popup: PopupWidget::new("Details", false, false, event_sender.clone()),
             active: false,
             visible: true,
             event_sender,
@@ -73,10 +80,20 @@ impl DynamoDB {
         }
     }
 
+    fn calculate_popup_area(&self, base_area: Rect) -> Rect {
+        Rect::new(
+            base_area.x + POPUP_PADDING,
+            base_area.y + POPUP_PADDING,
+            base_area.width - 2 * POPUP_PADDING,
+            base_area.height - 2 * POPUP_PADDING,
+        )
+    }
+
     pub fn render(&self, area: Rect, buf: &mut Buffer) {
         if !self.visible {
             return;
         }
+        let popup_area = self.calculate_popup_area(area);
 
         // Create a horizontal split for left and right panels
         let horizontal_split = Layout::default()
@@ -105,9 +122,23 @@ impl DynamoDB {
         // Render query results navigator (bottom of right panel)
         self.query_results_navigator
             .render(right_vertical_split[1], buf);
+
+        if self.details_popup.is_visible() {
+            self.details_popup.render(popup_area, buf);
+        }
+
     }
 
     pub fn handle_input(&mut self, key_event: crossterm::event::KeyEvent) {
+        if self.details_popup.is_visible() {
+            if let Some(signal) = self.details_popup.handle_input(key_event) {
+                self.event_sender
+                    .send(Event::Tab(TabEvent::ComponentActions(
+                        ComponentActions::WidgetActions(signal),
+                    )))
+                    .unwrap();
+            }
+        }
         match key_event.code {
             KeyCode::Char('t') => {
                 self.event_sender
@@ -185,6 +216,11 @@ impl DynamoDB {
                 self.query_results_navigator
                     .set_content(NavigatorContent::Records(content));
             }
+            ComponentActions::PopupDetails(title) => {
+                self.details_popup.set_profile_list(vec![title.clone()]);
+                self.details_popup.set_visible(true);
+                self.details_popup.set_active(true);
+            }
             ComponentActions::NextFocus => {
                 self.focus_next();
                 self.update_widget_states();
@@ -217,8 +253,27 @@ impl DynamoDB {
 
 
                     } else if widget_type == WidgetType::QueryResultsNavigator {
-                        self.query_results_navigator
-                            .process_event(widget_action.clone());
+                        if let Some(signal) = self.query_results_navigator
+                            .process_event(widget_action.clone()){
+                                match signal {
+                                    WidgetActions::AWSServiceNavigatorEvent(
+                                        AWSServiceNavigatorEvent::SelectedItem(WidgetEventType::RecordSelected(
+                                            title,
+                                        )),
+                                        WidgetType::QueryResultsNavigator,
+                                    ) => {
+                                        self.event_sender
+                                            .send(Event::Tab(TabEvent::ComponentActions(
+                                                ComponentActions::PopupDetails(
+                                                    title.clone(),
+                                                ),
+                                            )))
+                                            .unwrap();
+                                    }
+                                    _ => {}
+                                }
+
+                            }
                     }
                 }
                 WidgetActions::InputBoxEvent(InputBoxEvent::Written(content)) => {
@@ -226,6 +281,10 @@ impl DynamoDB {
                         content.lines().map(|line| line.to_string()).collect();
                     self.query_results_navigator
                         .set_content(NavigatorContent::Records(content_vec));
+                }
+                WidgetActions::PopupEvent(_) => {
+                    self.details_popup.set_visible(false);
+                    self.details_popup.set_active(false);
                 }
                 WidgetActions::InputBoxEvent(ref _input_box_event) => {
                     if let Some(signal) = self.query_input.process_event(widget_action){

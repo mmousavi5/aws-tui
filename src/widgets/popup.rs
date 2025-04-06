@@ -32,6 +32,7 @@ pub struct PopupWidget {
 impl PopupWidget {
     pub fn new(
         title: &str,
+        visible: bool,
         active: bool,
         event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
     ) -> Self {
@@ -44,11 +45,13 @@ impl PopupWidget {
             profile_list: profiles,
             selected_index: 0,
             active,
-            visible: true,
+            visible,
             event_sender,
         }
     }
-
+    pub fn set_profile_list(&mut self, profiles: Vec<String>) {
+        self.profile_list = profiles;
+    }
     fn calculate_popup_area(&self, area: Rect) -> Option<Rect> {
         if area.width <= MIN_POPUP_WIDTH || area.height <= MIN_POPUP_HEIGHT {
             return None;

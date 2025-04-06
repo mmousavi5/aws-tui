@@ -42,6 +42,7 @@ pub enum ComponentActions {
     NextFocus,
     SetTitle(String),
     SetQuery(String),
+    PopupDetails(String),
     WidgetActions(WidgetActions),
 }
 

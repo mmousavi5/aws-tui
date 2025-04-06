@@ -141,7 +141,7 @@ mod tests {
         let client = DynamoDBClient::new(profile, region).await.unwrap();
         let table_name = "test1"; // Replace with your actual table name
         let query_resulat = client
-            .query_table(table_name, "1".to_string())
+            .query_table(table_name.to_string(), "1".to_string())
             .await
             .unwrap();
         assert!(query_resulat.len() == 3); // Replace with actual assertions based on your table data

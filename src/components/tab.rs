@@ -64,6 +64,7 @@ impl Tab {
             popup_widget: Some(Box::new(PopupWidget::new(
                 content,
                 true,
+                true,
                 event_sender.clone(),
             ))),
             right_widgets,
