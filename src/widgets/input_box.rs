@@ -142,7 +142,7 @@ impl WidgetExt for InputBoxWidget {
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
-    fn process_event(&mut self, event: WidgetActions) {
+    fn process_event(&mut self, event: WidgetActions)  -> Option<WidgetActions> {
         match event {
             WidgetActions::InputBoxEvent(input_event) => match input_event {
                 InputBoxEvent::KeyPress(key_event) => {
@@ -150,37 +150,35 @@ impl WidgetExt for InputBoxWidget {
                         self.content.insert(self.cursor_position, c);
                         self.cursor_position += 1;
                     }
+                    None
                 }
                 InputBoxEvent::Backspace => {
                     if self.cursor_position > 0 {
                         self.cursor_position -= 1;
                         self.content.remove(self.cursor_position);
                     }
+                    None
                 }
                 InputBoxEvent::Delete => {
                     if self.cursor_position < self.content.len() {
                         self.content.remove(self.cursor_position);
                     }
+                    None
                 }
                 InputBoxEvent::Left => {
                     if self.cursor_position > 0 {
                         self.cursor_position -= 1;
                     }
+                    None
                 }
                 InputBoxEvent::Enter => {
                     // Handle enter key event
                     // For example, you can send the content to an event sender or process it
-                    self.event_sender
-                        .send(Event::Tab(TabEvent::ComponentActions(
-                            (ComponentActions::WidgetActions(WidgetActions::InputBoxEvent(
-                                InputBoxEvent::Written(self.content.clone()),
-                            ))),
-                        )))
-                        .unwrap();
+                    Some(WidgetActions::InputBoxEvent(InputBoxEvent::Written(self.content.clone())))
                 }
-                _ => {}
+                _ => {None}
             },
-            _ => {}
+            _ => {None}
         }
     }
     fn is_active(&self) -> bool {

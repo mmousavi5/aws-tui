@@ -8,7 +8,7 @@ use ratatui::{
 impl Widget for &App {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let block = Block::bordered()
-            .title("rat-tab-test")
+            .title("tab-toolbar")
             .title_alignment(Alignment::Center)
             .border_type(BorderType::Rounded);
 

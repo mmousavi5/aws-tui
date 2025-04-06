@@ -1,9 +1,8 @@
 use crate::{
-    event_managment::event::{AppEvent, Event, PopupEvent, TabActions, TabEvent, WidgetActions},
+    event_managment::event::{Event, PopupEvent, TabActions, TabEvent, WidgetActions},
     services::read_config,
     widgets::WidgetExt,
 };
-use aws_config::profile;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
@@ -11,7 +10,7 @@ use ratatui::{
     layout::Rect,
     style::{Color, Style},
     text::Line,
-    widgets::{Block, BorderType, Clear, Paragraph, Widget},
+    widgets::{Block, Clear, Paragraph, Widget},
 };
 use std::any::Any;
 
@@ -153,35 +152,37 @@ impl WidgetExt for PopupWidget {
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
-    fn process_event(&mut self, event: WidgetActions) {
+    fn process_event(&mut self, event: WidgetActions)  -> Option<WidgetActions> {
         match event {
             WidgetActions::PopupEvent(event) => match event {
                 PopupEvent::ArrowUp => {
                     if self.selected_index > 0 {
                         self.selected_index -= 1;
                     }
+                    None
                 }
                 PopupEvent::ArrowDown => {
                     if self.selected_index < self.profile_list.len() - 1 {
                         self.selected_index += 1;
                     }
+                    None
                 }
                 PopupEvent::Enter => {
                     if let Some(profile) = self.profile_list.get(self.selected_index) {
                         self.profile_name = Some(profile.clone());
-                        if let Err(e) = self.event_sender.send(Event::Tab(TabEvent::TabActions(
-                            TabActions::ProfileSelected(self.profile_name.clone().unwrap()),
-                        ))) {
-                            eprintln!("Failed to send profile selected event: {}", e);
-                        }
+                        return Some(WidgetActions::PopupEvent(PopupEvent::SelectedItem(
+                            self.profile_name.clone().unwrap(),
+                        )));
                     }
+                    None
                 }
                 PopupEvent::Escape => {
                     self.set_visible(false);
+                    None
                 }
-                _ => {}
+                _ => {None}
             },
-            _ => {}
+            _ => {None}
         }
     }
     fn is_active(&self) -> bool {

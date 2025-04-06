@@ -61,6 +61,7 @@ pub enum TabActions {
 
 #[derive(Clone)]
 pub enum PopupEvent {
+    SelectedItem(String),
     ArrowUp,
     ArrowDown,
     Enter,
@@ -70,6 +71,7 @@ pub enum PopupEvent {
 
 #[derive(Clone)]
 pub enum AWSServiceNavigatorEvent {
+    SelectedItem(WidgetEventType),
     ArrowUp,
     ArrowDown,
     Enter,

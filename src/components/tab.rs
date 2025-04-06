@@ -1,13 +1,12 @@
-use crate::services::aws::{TabClients, TabClientsError};
+use crate::services::aws::TabClients;
 use crate::{
     components::dynamodb::{ComponentFocus, DynamoDB},
     event_managment::event::{
-        ComponentActions, Event, TabActions, TabEvent, WidgetActions, WidgetEventType, WidgetType,
+        ComponentActions, Event, TabActions, TabEvent, WidgetActions, WidgetEventType, WidgetType,AWSServiceNavigatorEvent,PopupEvent,
     },
     widgets::{
         WidgetExt,
         aws_service_navigator::{AWSServiceNavigator, NavigatorContent},
-        input_box::InputBoxWidget,
         popup::PopupWidget,
     },
 };
@@ -105,35 +104,7 @@ impl Tab {
                             widget.handle_input(event);
                         }
                     }
-                } // match event.code {
-                  //     KeyCode::Char('t') => {
-                  //         if self.current_focus {
-                  //             self.left_widgets.set_active(true);
-                  //             self.current_focus = !self.current_focus;
-                  //         } else {
-                  //             self.left_widgets.set_active(false);
-                  //             if let Some(widget) = self.right_widgets.get_mut(&self.active_right_widget) {
-                  //                 widget.set_active(true);
-                  //                 match widget.get_current_focus() {
-                  //                     ComponentFocus::None => {
-                  //                         self.current_focus = !self.current_focus;
-                  //                         widget.reset_focus();
-                  //                     }
-                  //                     _ => {
-                  //                         widget.handle_input(event);
-                  //                     }
-                  //                 }
-                  //             }
-                  //             self.current_focus = true;
-                  //         }
-                  //     }
-                  //     _ => {
-                  //         if self.current_focus {
-                  //         } else if let Some(widget) = self.right_widgets.get_mut(&self.active_right_widget) {
-                  //             widget.handle_input(event);
-                  //         }
-                  //     }
-                  // }
+                }
             }
         }
     }
@@ -146,13 +117,37 @@ impl Tab {
                 WidgetActions::PopupEvent(ref _popup_event) => {
                     if let Some(popup) = self.popup_widget.as_mut() {
                         if self.popup_mod {
-                            popup.process_event(widget_action);
+                            if let Some(signal) = popup.process_event(widget_action){
+                                match signal {
+                                    WidgetActions::PopupEvent(PopupEvent::SelectedItem(selected)) => {
+                                        self.event_sender
+                                            .send(Event::Tab(TabEvent::TabActions(
+                                                TabActions::ProfileSelected(selected),
+                                            )))
+                                            .unwrap();
+                                    }
+                                    _ => {}
+                                    
+                                }
+                            }
                         }
                     }
                 }
                 WidgetActions::AWSServiceNavigatorEvent(ref _aws_navigator_event, _) => {
-                    self.left_widgets.process_event(widget_action);
-                }
+                    if let Some(signal) = self.left_widgets.process_event(widget_action) {
+                            match signal {
+                                WidgetActions::AWSServiceNavigatorEvent(AWSServiceNavigatorEvent::SelectedItem(selected), widget_type) => {
+                                    self.event_sender
+                                        .send(Event::Tab(TabEvent::TabActions(
+                                            TabActions::AWSServiceSelected(selected),
+                                        )))
+                                        .unwrap();
+                                }
+                                _ => {}
+                                
+                            }
+                        }
+                    }
                 _ => {}
             },
             TabEvent::ComponentActions(component_action) => {
@@ -313,57 +308,4 @@ impl Tab {
             base_area.height - 2 * POPUP_PADDING,
         )
     }
-
-    // pub async fn update_sub_widgets(&mut self, event: WidgetEventType) -> Result<(), TabClientsError> {
-    //     match event {
-    //         WidgetEventType::S3 => {
-    //             let buckets = match self.aws_clients.list_s3_buckets().await {
-    //                 Ok(buckets) if !buckets.is_empty() => buckets,
-    //                 Ok(_) => vec!["No buckets found".to_string()],
-    //                 Err(e) => vec![format!("Error listing buckets: {}", e)],
-    //             };
-
-    //             if let Some(existing_widget) = self.right_widgets.get_mut(&WidgetType::S3) {
-    //                 if let Some(navigator) = existing_widget.as_any_mut().downcast_mut::<AWSServiceNavigator>() {
-    //                     navigator.set_content(NavigatorContent::Records(buckets));
-    //                 }
-    //             } else {
-    //                 self.right_widgets.insert(
-    //                     WidgetType::S3,
-    //                     Box::new(AWSServiceNavigator::new(
-    //                         WidgetType::AWSService,
-    //                         true,
-    //                         self.event_sender.clone(),
-    //                         NavigatorContent::Records(buckets)
-    //                     ))
-    //                 );
-    //             }
-    //             self.active_right_widget = WidgetType::S3;
-    //         },
-    //         WidgetEventType::DynamoDB => {
-    //             let tables = match self.aws_clients.list_dynamodb_tables().await {
-    //                 Ok(tables) if !tables.is_empty() => tables,
-    //                 Ok(_) => vec!["No tables found".to_string()],
-    //                 Err(e) => vec![format!("Error listing tables: {}", e)],
-    //             };
-
-    //             if let Some(dynamodb) = self.right_widgets.get_mut(&WidgetType::DynamoDB) {
-    //                 if let Some(dynamodb_widget) = dynamodb.as_any_mut().downcast_mut::<DynamoDB>() {
-    //                     // Update the tables in DynamoDB component
-    //                     // You'll need to implement set_tables method in DynamoDB
-    //                     dynamodb_widget.set_tables(tables);
-    //                 }
-    //             } else {
-    //                 self.right_widgets.insert(
-    //                     WidgetType::DynamoDB,
-    //                     Box::new(DynamoDB::new(self.event_sender.clone()))
-    //                 );
-    //             }
-    //             self.active_right_widget = WidgetType::DynamoDB;
-    //         },
-    //         WidgetEventType::RecordSelected(_) => return Ok(()),
-    //     }
-    //     self.right_widgets.remove(&WidgetType::Default);
-    //     Ok(())
-    // }
 }

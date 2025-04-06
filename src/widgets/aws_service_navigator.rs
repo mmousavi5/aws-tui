@@ -1,7 +1,6 @@
 use crate::event_managment::event::{Event, TabEvent, WidgetActions, WidgetEventType, WidgetType};
 use crate::{
     event_managment::event::{AWSServiceNavigatorEvent, TabActions},
-    services,
     widgets::WidgetExt,
 };
 use crossterm::event::{KeyCode, KeyEvent};
@@ -9,7 +8,7 @@ use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Rect},
     style::{Color, Style},
-    widgets::{self, Block, BorderType, Borders, Clear, Paragraph, Widget},
+    widgets::{Block, BorderType, Borders, Paragraph, Widget},
 };
 use std::any::Any;
 
@@ -52,19 +51,23 @@ impl AWSServiceNavigator {
         }
     }
 
-    fn selected_item(&self) -> Option<Event> {
+    fn selected_item(&self) -> Option<WidgetActions> {
         match &self.content {
             NavigatorContent::Services(services) => {
                 services.get(self.selected_index).map(|service| {
-                    Event::Tab(TabEvent::TabActions(TabActions::AWSServiceSelected(
-                        service.clone(),
-                    )))
+                    WidgetActions::AWSServiceNavigatorEvent(
+                        AWSServiceNavigatorEvent::SelectedItem(service.clone()),
+                        self.widget_type
+                    )
                 })
             }
             NavigatorContent::Records(records) => records.get(self.selected_index).map(|record| {
-                Event::Tab(TabEvent::TabActions(TabActions::AWSServiceSelected(
-                    WidgetEventType::RecordSelected(record.clone()),
-                )))
+                WidgetActions::AWSServiceNavigatorEvent(
+                    AWSServiceNavigatorEvent::SelectedItem(
+                        WidgetEventType::RecordSelected(record.clone())
+                    ),
+                    self.widget_type
+                )
             }),
         }
     }
@@ -182,32 +185,31 @@ impl WidgetExt for AWSServiceNavigator {
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
-    fn process_event(&mut self, event: WidgetActions) {
+    fn process_event(&mut self, event: WidgetActions)  -> Option<WidgetActions>{
         match event {
             WidgetActions::AWSServiceNavigatorEvent(event, _) => match event {
                 AWSServiceNavigatorEvent::ArrowUp => {
                     if self.selected_index > 0 {
                         self.selected_index -= 1;
                     }
+                    None
                 }
                 AWSServiceNavigatorEvent::ArrowDown => {
                     if self.selected_index < self.content_len().saturating_sub(1) {
                         self.selected_index += 1;
                     }
+                    None
                 }
                 AWSServiceNavigatorEvent::Enter => {
-                    if let Some(event) = self.selected_item() {
-                        if let Err(e) = self.event_sender.send(event) {
-                            eprintln!("Error sending event: {}", e);
-                        }
-                    }
+                    self.selected_item()
                 }
                 AWSServiceNavigatorEvent::Escape => {
                     self.set_visible(false);
+                    None
                 }
-                _ => {}
+                _ => {None}
             },
-            _ => {}
+            _ => {None}
         }
     }
     fn is_active(&self) -> bool {

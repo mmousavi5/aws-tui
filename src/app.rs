@@ -1,7 +1,6 @@
 use crate::components::tab::Tab;
-use crate::event_managment::event::{AppEvent, Event, EventHandler, TabActions};
-use crate::event_managment::event::{TabEvent, WidgetActions, WidgetEventType};
-use crossterm::event;
+use crate::event_managment::event::{AppEvent, Event, EventHandler};
+use crate::event_managment::event::TabEvent;
 use ratatui::{
     DefaultTerminal,
     crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
@@ -136,32 +135,4 @@ impl App {
         self.active_tab = (self.active_tab + 1) % self.tabs.len();
     }
 
-    pub fn set_active_tab_name(&mut self, name: &str) {
-        if let Some(tab) = self.tabs.get_mut(self.active_tab) {
-            tab.set_name(name.to_string());
-        }
-    }
-
-    pub async fn update_sub_widgets(&mut self, event_type: WidgetEventType) {
-        // if let Some(tab) = self.tabs.get_mut(self.active_tab) {
-        //     if let Err(e) = tab.update_sub_widgets(event_type).await {
-        //         eprintln!("Error updating sub widgets: {}", e);
-        //     }
-        // } else {
-        //     panic!("No active tab found");
-        // }
-    }
-
-    // pub async fn handle_input_box_event(&mut self, input: String) -> color_eyre::Result<()> {
-    //     if let Some(tab) = self.tabs.get_mut(self.active_tab) {
-    //         tab.handle_input_box_event(input).await?;
-    //     }
-    //     Ok(())
-    // }
-
-    // pub fn apply_tab_action(&mut self, tab_action: TabEvent) {
-    //     if let Some(tab) = self.tabs.get_mut(self.active_tab) {
-    //         tab.process_event(tab_action);
-    //     }
-    // }
 }
