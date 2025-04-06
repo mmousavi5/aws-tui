@@ -15,7 +15,7 @@ use ratatui::{
 use crate::event_managment::event::{AWSServiceNavigatorEvent, WidgetEventType, PopupEvent};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use crate::widgets::popup::PopupWidget;
+use crate::widgets::popup::{PopupWidget, PopupContent};
 
 
 const TAB_HEIGHT: u16 = 3;
@@ -217,7 +217,7 @@ impl DynamoDB {
                     .set_content(NavigatorContent::Records(content));
             }
             ComponentActions::PopupDetails(title) => {
-                self.details_popup.set_profile_list(vec![title.clone()]);
+                self.details_popup.set_profile_list(PopupContent::Details(title.clone()));
                 self.details_popup.set_visible(true);
                 self.details_popup.set_active(true);
             }

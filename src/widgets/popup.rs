@@ -13,16 +13,39 @@ use ratatui::{
     widgets::{Block, Clear, Paragraph, Widget},
 };
 use std::any::Any;
+use serde_json;
 
 const POPUP_MARGIN: u16 = 5;
 const MIN_POPUP_WIDTH: u16 = 20;
 const MIN_POPUP_HEIGHT: u16 = 10;
 
+#[derive(Clone, Debug)]
+pub enum PopupContent {
+    Profiles(Vec<String>),
+    Details(String),
+}
+
+impl PopupContent {
+    pub fn len(&self) -> usize {
+        match self {
+            PopupContent::Profiles(profiles) => profiles.len(),
+            PopupContent::Details(_) => 0,
+        }
+    }
+
+    pub fn get(&self, index: usize) -> Option<&String> {
+        match self {
+            PopupContent::Profiles(profiles) => profiles.get(index),
+            PopupContent::Details(_) => None,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct PopupWidget {
     title: String,
     profile_name: Option<String>,
-    profile_list: Vec<String>,
+    profile_list: PopupContent,
     selected_index: usize,
     active: bool,
     visible: bool,
@@ -36,8 +59,10 @@ impl PopupWidget {
         active: bool,
         event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
     ) -> Self {
-        let profiles = read_config::get_aws_profiles()
-            .unwrap_or_else(|_| vec!["No profiles found".to_string()]);
+        let profiles = match read_config::get_aws_profiles() {
+            Ok(profiles) => PopupContent::Profiles(profiles),
+            Err(_) => PopupContent::Profiles(vec!["No profiles found".to_string()]),
+        };
 
         Self {
             title: title.to_string(),
@@ -49,7 +74,7 @@ impl PopupWidget {
             event_sender,
         }
     }
-    pub fn set_profile_list(&mut self, profiles: Vec<String>) {
+    pub fn set_profile_list(&mut self, profiles: PopupContent) {
         self.profile_list = profiles;
     }
     fn calculate_popup_area(&self, area: Rect) -> Option<Rect> {
@@ -57,11 +82,17 @@ impl PopupWidget {
             return None;
         }
 
+        // Make the popup larger for JSON content
+        let (margin_x, margin_y) = match self.profile_list {
+            PopupContent::Details(_) => (POPUP_MARGIN / 2, POPUP_MARGIN / 2),
+            _ => (POPUP_MARGIN, POPUP_MARGIN),
+        };
+
         Some(Rect::new(
-            area.x.saturating_add(POPUP_MARGIN),
-            area.y.saturating_add(POPUP_MARGIN),
-            area.width.saturating_sub(POPUP_MARGIN * 2),
-            area.height.saturating_sub(POPUP_MARGIN * 2),
+            area.x.saturating_add(margin_x),
+            area.y.saturating_add(margin_y),
+            area.width.saturating_sub(margin_x * 2),
+            area.height.saturating_sub(margin_y * 2),
         ))
     }
 
@@ -75,18 +106,31 @@ impl PopupWidget {
     }
 
     fn render_profiles(&self) -> String {
-        self.profile_list
-            .iter()
-            .enumerate()
-            .map(|(i, profile)| {
-                if i == self.selected_index {
-                    format!("> {}", profile)
-                } else {
-                    format!("  {}", profile)
+        match &self.profile_list {
+            PopupContent::Profiles(profiles) => profiles
+                .iter()
+                .enumerate()
+                .map(|(i, profile)| {
+                    if i == self.selected_index {
+                        format!("> {}", profile)
+                    } else {
+                        format!("  {}", profile)
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n"),
+            PopupContent::Details(content) => {
+                // Parse the JSON string
+                match serde_json::from_str::<serde_json::Value>(content) {
+                    Ok(json) => {
+                        // Pretty print with proper indentation
+                        serde_json::to_string_pretty(&json)
+                            .unwrap_or_else(|_| content.clone())
+                    }
+                    Err(_) => content.clone(),
                 }
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
+            }
+        }
     }
 }
 
