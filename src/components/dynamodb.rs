@@ -1,7 +1,8 @@
 use crate::event_managment::event::{
     ComponentActions, Event, InputBoxEvent, TabEvent, WidgetActions, WidgetType,
 };
-use crate::services::aws::s3_client::{self, S3Client};
+use crate::services::aws::s3_client::S3Client;
+use crate::services::aws::dynamo_client::DynamoDBClient;
 use crate::widgets::WidgetExt;
 use crate::widgets::aws_service_navigator::{AWSServiceNavigator, NavigatorContent};
 use crate::widgets::input_box::InputBoxWidget;
@@ -30,7 +31,7 @@ pub struct DynamoDB {
     visible: bool,
     event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
     current_focus: ComponentFocus,
-    s3_client: Option<Arc<Mutex<S3Client>>>,
+    dynamodb_client: Option<Arc<Mutex<DynamoDBClient>>>,
 }
 
 impl DynamoDB {
@@ -63,7 +64,7 @@ impl DynamoDB {
             visible: true,
             event_sender,
             current_focus: ComponentFocus::Navigation,
-            s3_client: None,
+            dynamodb_client: None,
         }
     }
 
@@ -199,8 +200,8 @@ impl DynamoDB {
         self.current_focus = ComponentFocus::Navigation;
     }
 
-    pub fn set_s3_client(&mut self, s3_client: Arc<Mutex<S3Client>>) {
-        self.s3_client = Some(s3_client);
+    pub fn set_client(&mut self, dynamodb_client: Arc<Mutex<DynamoDBClient>>) {
+        self.dynamodb_client = Some(dynamodb_client);
     }
 
     pub fn focus_next(&mut self) -> ComponentFocus {
@@ -214,9 +215,9 @@ impl DynamoDB {
     }
     pub async fn update(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         // Update the DynamoDB tables list if client is available
-        if let Some(client) = &self.s3_client {
+        if let Some(client) = &self.dynamodb_client {
             let client = client.lock().await;
-            let tables = client.list_buckets().await?;
+            let tables = client.list_tables().await?;
             self.table_list_navigator.set_content(NavigatorContent::Records(tables));
         }
         Ok(())

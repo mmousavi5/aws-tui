@@ -60,7 +60,7 @@ impl TabClients {
         Ok(self.s3_client.as_ref().unwrap().clone())
     }
 
-    async fn get_dynamodb_client(&mut self) -> Result<Arc<Mutex<DynamoDBClient>>, TabClientsError> {
+    pub async fn get_dynamodb_client(&mut self) -> Result<Arc<Mutex<DynamoDBClient>>, TabClientsError> {
         if self.dynamodb_client.is_none() {
             let client = DynamoDBClient::new(self.profile.clone(), self.region.clone()).await?;
             self.dynamodb_client = Some(Arc::new(Mutex::new(client)));
@@ -87,7 +87,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_s3_buckets() {
-        let profile = "xalgo_kambi_adapter".to_string();
+        let profile = "default".to_string();
         let region = "eu-west-1".to_string();
         let mut client = TabClients::new(profile, region);
         let buckets = client.list_s3_buckets().await.unwrap();

@@ -171,7 +171,7 @@ impl Tab {
             }
             TabActions::AWSServiceSelected(service) => {
                 if let Some(widget) = self.right_widgets.get_mut(&self.active_right_widget) {
-                    widget.set_s3_client(self.aws_clients.get_s3_client().await.unwrap());
+                    widget.set_client(self.aws_clients.get_dynamodb_client().await.unwrap());
                     widget.update().await;    
                 }
             }
