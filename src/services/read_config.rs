@@ -18,10 +18,11 @@ pub fn get_aws_profiles() -> Result<Vec<String>, Box<dyn Error>> {
     let config_map: HashMap<String, HashMap<String, String>> = settings.try_deserialize()?;
 
     // Collect profile names into a Vec
-    let profiles: Vec<String> = config_map
+    let mut profiles: Vec<String> = config_map
         .keys()
         .filter_map(|section| section.strip_prefix("profile ").map(String::from))
         .collect();
+    profiles.sort();
 
     Ok(profiles)
 }

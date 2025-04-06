@@ -14,6 +14,7 @@ use ratatui::{
 };
 use serde_json;
 use std::any::Any;
+use ratatui::layout::{Layout, Direction, Constraint};
 
 const POPUP_MARGIN: u16 = 5;
 const MIN_POPUP_WIDTH: u16 = 20;
@@ -82,20 +83,35 @@ impl PopupWidget {
             return None;
         }
 
-        // Make the popup larger for JSON content
-        let (margin_x, margin_y) = match self.profile_list {
-            PopupContent::Details(_) => (POPUP_MARGIN / 2, POPUP_MARGIN / 2),
-            _ => (POPUP_MARGIN, POPUP_MARGIN),
+        // Define percentage constraints based on popup type
+        let (width_percent, height_percent) = match self.profile_list {
+            PopupContent::Details(_) => (80, 80),  // Larger popup for details
+            _ => (60, 60),  // Smaller popup for profiles
         };
 
-        Some(Rect::new(
-            area.x.saturating_add(margin_x),
-            area.y.saturating_add(margin_y),
-            area.width.saturating_sub(margin_x * 2),
-            area.height.saturating_sub(margin_y * 2),
-        ))
-    }
+        // Create layout splits for both directions
+        let vertical_split = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Percentage((100 - height_percent) / 2),
+                Constraint::Percentage(height_percent),
+                Constraint::Percentage((100 - height_percent) / 2),
+            ])
+            .split(area);
 
+        let horizontal_split = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage((100 - width_percent) / 2),
+                Constraint::Percentage(width_percent),
+                Constraint::Percentage((100 - width_percent) / 2),
+            ])
+            .split(vertical_split[1]);
+
+        // Return the center rectangle
+        Some(horizontal_split[1])
+    }
+    
     fn calculate_content_area(&self, popup_area: Rect) -> Rect {
         Rect::new(
             popup_area.x.saturating_add(2),
