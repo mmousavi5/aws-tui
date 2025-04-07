@@ -47,8 +47,10 @@ pub enum S3ComponentActions {
     ArrowDown,
     NextFocus,
     PreviousFocus,
-    SetTitle(String),
-    SetQuery(String),
+    SelectBucket(String),
+    NavigateFolder(String),
+    NavigateUp,
+    LoadPath(String, String), // bucket, path
     PopupDetails(String),
     WidgetActions(WidgetActions),
 }
