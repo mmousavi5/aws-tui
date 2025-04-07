@@ -39,6 +39,18 @@ pub enum TabEvent {
 pub enum ComponentActions {
     S3ComponentActions(S3ComponentActions),
     DynamoDBComponentActions(DynamoDBComponentActions),
+    CloudWatchComponentActions(CloudWatchComponentActions),
+
+}
+#[derive(Clone)]
+pub enum CloudWatchComponentActions {
+    SelectLogGroup(String),
+    SearchLogs(String),
+    ViewLogDetails(String),
+    PopupDetails(String),
+    NextFocus,
+    PreviousFocus,
+    WidgetActions(WidgetActions),
 }
 
 #[derive(Clone)]
@@ -134,11 +146,13 @@ pub enum WidgetEventType {
     S3,
     /// Active tab event.
     DynamoDB,
+    CloudWatch,
     RecordSelected(String), // Add this new variant
 }
 
 impl WidgetEventType {
-    pub const VALUES: [Self; 2] = [Self::S3, Self::DynamoDB];
+    // Update the VALUES array to include CloudWatch
+    pub const VALUES: [Self; 3] = [Self::S3, Self::DynamoDB, Self::CloudWatch];
 }
 
 impl std::fmt::Display for WidgetEventType {
@@ -146,6 +160,7 @@ impl std::fmt::Display for WidgetEventType {
         match self {
             WidgetEventType::S3 => write!(f, "S3"),
             WidgetEventType::DynamoDB => write!(f, "DynamoDB"),
+            WidgetEventType::CloudWatch => write!(f, "CloudWatch"),
             WidgetEventType::RecordSelected(record) => write!(f, "{}", record),
         }
     }
@@ -174,6 +189,7 @@ pub enum WidgetType {
     AWSService,
     S3,
     DynamoDB,
+    CloudWatch,
     InputBox,
     QueryResultsNavigator,
 }

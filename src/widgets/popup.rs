@@ -136,13 +136,31 @@ impl PopupWidget {
                 .collect::<Vec<_>>()
                 .join("\n"),
             PopupContent::Details(content) => {
-                // Parse the JSON string
-                match serde_json::from_str::<serde_json::Value>(content) {
-                    Ok(json) => {
-                        // Pretty print with proper indentation
-                        serde_json::to_string_pretty(&json).unwrap_or_else(|_| content.clone())
+                // Check if the content starts with a timestamp pattern like [YYYY-MM-DD HH:MM:SS]
+                if let Some(json_start) = content.find("] {") {
+                    // Extract the potential JSON part (skipping timestamp)
+                    let json_str = &content[(json_start + 1).min(content.len())..].trim();
+                    
+                    // Parse the JSON string
+                    match serde_json::from_str::<serde_json::Value>(json_str) {
+                        Ok(json) => {
+                            // Pretty print with proper indentation
+                            serde_json::to_string_pretty(&json).unwrap_or_else(|_| content.clone())
+                        }
+                        Err(_) => {
+                            // Try the original content if JSON extraction failed
+                            match serde_json::from_str::<serde_json::Value>(content) {
+                                Ok(json) => serde_json::to_string_pretty(&json).unwrap_or_else(|_| content.clone()),
+                                Err(_) => content.clone(),
+                            }
+                        }
                     }
-                    Err(_) => content.clone(),
+                } else {
+                    // If no timestamp pattern, try parsing the entire string as JSON
+                    match serde_json::from_str::<serde_json::Value>(content) {
+                        Ok(json) => serde_json::to_string_pretty(&json).unwrap_or_else(|_| content.clone()),
+                        Err(_) => content.clone(),
+                    }
                 }
             }
         }

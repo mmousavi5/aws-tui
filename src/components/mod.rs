@@ -2,6 +2,7 @@ pub(crate) mod dynamodb;
 pub(crate) mod tab;
 pub(crate) mod aws_base_component;
 pub(crate) mod s3;
+pub(crate) mod cloudwatch;
 use crate::event_managment::event::{ComponentActions, Event, WidgetActions};
 use crossterm::event::KeyEvent;
 use ratatui::{buffer::Buffer, layout::Rect};

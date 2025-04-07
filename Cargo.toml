@@ -26,6 +26,10 @@ tracing-subscriber = "0.3.18"
 aws-sdk-s3 = "1.38.0"
 clipboard = "0.5"
 serde_json = "1.0"
+aws-sdk-cloudwatch = "1.70.0"
+aws-sdk-cloudwatchlogs = "1.76.0"
+chrono = "0.4"
+
 
 [dev-dependencies]
 mockall = "0.13.1"

@@ -3,7 +3,7 @@ use crate::{
     components::dynamodb::DynamoDB,
     event_managment::event::{
         AWSServiceNavigatorEvent, ComponentActions, Event, PopupEvent, TabActions, TabEvent,
-        WidgetActions, WidgetEventType, WidgetType,DynamoDBComponentActions,S3ComponentActions,
+        WidgetActions, WidgetEventType, WidgetType,DynamoDBComponentActions,S3ComponentActions,CloudWatchComponentActions,
     },
     widgets::{
         WidgetExt,
@@ -24,6 +24,8 @@ use ratatui::{
 use std::collections::HashMap;
 use crate::components::s3::S3Component;
 use crate::components::AWSComponent;
+use crate::components::cloudwatch::CloudWatch;
+
 // Constants
 const TAB_HEIGHT: u16 = 3;
 const POPUP_PADDING: u16 = 5;
@@ -60,6 +62,10 @@ impl Tab {
         right_widgets.insert(
             WidgetType::S3,
             Box::new(S3Component::new(event_sender.clone()))
+        );
+        right_widgets.insert(
+            WidgetType::CloudWatch,
+            Box::new(CloudWatch::new(event_sender.clone()))
         );
 
         Self {
@@ -186,6 +192,11 @@ impl Tab {
                             widget.process_event(component_action).await;
                         }
                     },
+                    ComponentActions::CloudWatchComponentActions(_) if self.active_right_widget == WidgetType::CloudWatch => {
+                        if let Some(widget) = self.right_widgets.get_mut(&WidgetType::CloudWatch) {
+                            widget.process_event(component_action).await;
+                        }
+                    },
                     // Handle generic component actions that aren't specific to a component type
                     _ => {
                         if let Some(widget) = self.right_widgets.get_mut(&self.active_right_widget) {
@@ -224,6 +235,16 @@ impl Tab {
                             }
                         }
                     }
+                    WidgetEventType::CloudWatch => {
+                        self.active_right_widget = WidgetType::CloudWatch;
+                        if let Some(widget) = self.right_widgets.get_mut(&WidgetType::CloudWatch) {
+                            if let Ok(client) = self.aws_clients.get_cloudwatch_client().await {
+                                let cloudwatch = widget.as_any_mut().downcast_mut::<CloudWatch>().unwrap();
+                                cloudwatch.set_client(client);
+                                widget.update().await.ok();
+                            }
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -257,6 +278,13 @@ impl Tab {
                                         )))
                                         .unwrap();
                                 },
+                                WidgetType::CloudWatch => {
+                                    self.event_sender
+                                        .send(Event::Tab(TabEvent::ComponentActions(
+                                            ComponentActions::CloudWatchComponentActions(CloudWatchComponentActions::NextFocus),
+                                        )))
+                                        .unwrap();
+                                },
                                 _ => {}
                             }
                         }
@@ -280,6 +308,14 @@ impl Tab {
                                     self.event_sender
                                         .send(Event::Tab(TabEvent::ComponentActions(
                                             ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::PreviousFocus),
+                                        )))
+                                        .unwrap();
+                                },
+
+                                WidgetType::CloudWatch => {
+                                    self.event_sender
+                                        .send(Event::Tab(TabEvent::ComponentActions(
+                                            ComponentActions::CloudWatchComponentActions(CloudWatchComponentActions::PreviousFocus),
                                         )))
                                         .unwrap();
                                 },

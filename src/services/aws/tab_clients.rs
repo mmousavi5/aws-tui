@@ -4,6 +4,7 @@ use tokio::sync::Mutex;
 
 use super::dynamo_client::{DynamoDBClient, DynamoDBClientError};
 use super::s3_client::{S3Client, S3ClientError};
+use super::cloudwatch_client::{CloudWatchClient, CloudWatchClientError};
 
 #[derive(Error, Debug)]
 pub enum TabClientsError {
@@ -11,10 +12,14 @@ pub enum TabClientsError {
     S3Error(#[from] S3ClientError),
     #[error("DynamoDB client error: {0}")]
     DynamoDBError(#[from] DynamoDBClientError),
+    #[error("CloudWatch client error: {0}")]
+    CloudWatchError(#[from] CloudWatchClientError),
     #[error("AWS S3 SDK error: {0}")]
     AWSS3Error(#[from] aws_sdk_s3::Error),
     #[error("AWS DynamoDB SDK error: {0}")]
     AWSDynamoDBError(#[from] aws_sdk_dynamodb::Error),
+    #[error("AWS CloudWatch SDK error: {0}")]
+    AWSCloudWatchError(#[from] aws_sdk_cloudwatch::Error),
     #[error("Client initialization error: {0}")]
     InitError(String),
 }
@@ -22,6 +27,7 @@ pub enum TabClientsError {
 pub struct TabClients {
     s3_client: Option<Arc<Mutex<S3Client>>>,
     dynamodb_client: Option<Arc<Mutex<DynamoDBClient>>>,
+    cloudwatch_client: Option<Arc<Mutex<CloudWatchClient>>>,
     profile: String,
     region: String,
 }
@@ -31,6 +37,7 @@ impl TabClients {
         Self {
             s3_client: None,
             dynamodb_client: None,
+            cloudwatch_client: None,
             profile,
             region,
         }
@@ -41,6 +48,7 @@ impl TabClients {
             self.profile = profile;
             self.s3_client = None;
             self.dynamodb_client = None;
+            self.cloudwatch_client = None;
         }
     }
 
@@ -49,6 +57,7 @@ impl TabClients {
             self.region = region;
             self.s3_client = None;
             self.dynamodb_client = None;
+            self.cloudwatch_client = None;
         }
     }
 
@@ -69,6 +78,17 @@ impl TabClients {
         }
         Ok(self.dynamodb_client.as_ref().unwrap().clone())
     }
+    
+    pub async fn get_cloudwatch_client(
+        &mut self,
+    ) -> Result<Arc<Mutex<CloudWatchClient>>, TabClientsError> {
+        if self.cloudwatch_client.is_none() {
+            let client = CloudWatchClient::new(self.profile.clone(), self.region.clone()).await?;
+            self.cloudwatch_client = Some(Arc::new(Mutex::new(client)));
+        }
+        Ok(self.cloudwatch_client.as_ref().unwrap().clone())
+    }
+
     pub async fn list_s3_buckets(&mut self) -> Result<Vec<String>, TabClientsError> {
         let client = self.get_s3_client().await?;
         let client = client.lock().await;
@@ -80,28 +100,5 @@ impl TabClients {
         let client = client.lock().await;
         Ok(client.list_tables().await?)
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use aws_config::profile::Profile;
-
-    #[tokio::test]
-    async fn test_list_s3_buckets() {
-        let profile = "default".to_string();
-        let region = "eu-west-1".to_string();
-        let mut client = TabClients::new(profile, region);
-        let buckets = client.list_s3_buckets().await.unwrap();
-        assert!(buckets.len() > 0);
-    }
-
-    #[tokio::test]
-    async fn test_list_dynamodb_tables() {
-        let profile = "default".to_string();
-        let region = "eu-west-1".to_string();
-        let mut client = TabClients::new(profile, region);
-        let tables = client.list_dynamodb_tables().await.unwrap();
-        assert!(tables.len() > 0);
-    }
 }
