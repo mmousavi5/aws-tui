@@ -134,8 +134,8 @@ impl AWSComponent for S3Component {
         let right_vertical_split = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Percentage(80), // Objects list
-                Constraint::Percentage(20), // Object details/metadata
+                Constraint::Percentage(20), // Objects list
+                Constraint::Percentage(80), // Object details/metadata
             ])
             .split(horizontal_split[1]);
 
@@ -143,8 +143,8 @@ impl AWSComponent for S3Component {
         self.base.navigator.render(horizontal_split[0], buf);
         self.base
             .results_navigator
-            .render(right_vertical_split[0], buf);
-        self.base.input.render(right_vertical_split[1], buf);
+            .render(right_vertical_split[1], buf);
+        self.base.input.render(right_vertical_split[0], buf);
 
         if self.base.details_popup.is_visible() {
             self.base.details_popup.render(area, buf);

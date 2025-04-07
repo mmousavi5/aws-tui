@@ -105,6 +105,7 @@ impl WidgetExt for InputBoxWidget {
             KeyCode::Backspace => Some(WidgetActions::InputBoxEvent(InputBoxEvent::Backspace)),
             KeyCode::Delete => Some(WidgetActions::InputBoxEvent(InputBoxEvent::Delete)),
             KeyCode::Left => Some(WidgetActions::InputBoxEvent(InputBoxEvent::Left)),
+            KeyCode::Right => Some(WidgetActions::InputBoxEvent(InputBoxEvent::Right)),
             KeyCode::Enter => Some(WidgetActions::InputBoxEvent(InputBoxEvent::Enter)),
 
             _ => None,
@@ -156,6 +157,12 @@ impl WidgetExt for InputBoxWidget {
                 InputBoxEvent::Left => {
                     if self.cursor_position > 0 {
                         self.cursor_position -= 1;
+                    }
+                    None
+                }
+                InputBoxEvent::Right => {
+                    if self.cursor_position < self.content.len() {
+                        self.cursor_position += 1;
                     }
                     None
                 }

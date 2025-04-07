@@ -106,17 +106,18 @@ impl AWSComponent for CloudWatch {
         let right_vertical_split = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Percentage(80), // Log events list
-                Constraint::Percentage(20), // Search/filter input
+                Constraint::Percentage(20), // Log events list
+                Constraint::Percentage(80), // Search/filter input
             ])
             .split(horizontal_split[1]);
 
         // Render components
         self.base.navigator.render(horizontal_split[0], buf);
+        self.base.input.render(right_vertical_split[0], buf);
+
         self.base
             .results_navigator
-            .render(right_vertical_split[0], buf);
-        self.base.input.render(right_vertical_split[1], buf);
+            .render(right_vertical_split[1], buf);
 
         if self.base.details_popup.is_visible() {
             self.base.details_popup.render(area, buf);
