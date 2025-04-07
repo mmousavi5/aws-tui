@@ -145,9 +145,6 @@ impl AWSComponentBase {
             }
             _ => {}
         }
-
-        items.push(("Tab".to_string(), "Switch focus".to_string()));
-
         items
     }
 }

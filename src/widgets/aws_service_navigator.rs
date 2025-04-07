@@ -546,6 +546,7 @@ impl WidgetExt for AWSServiceNavigator {
             // Standard navigation help
             items.push(("Enter".to_string(), "Select".to_string()));
             items.push(("Ctrl+F".to_string(), "Filter".to_string()));
+            items.push(("/".to_string(), "Filter".to_string()));
 
             if !self.filter_text.is_empty() {
                 items.push(("Esc".to_string(), "Clear filter".to_string()));

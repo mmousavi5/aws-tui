@@ -124,7 +124,8 @@ impl AWSComponent for DynamoDB {
             )) => {
                 self.base.navigator.set_title(title.clone());
                 self.base.selected_item = Some(title);
-            }
+                self.base.focus_next();
+                self.base.update_widget_states();            }
             ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::SetQuery(
                 query,
             )) => {
@@ -145,6 +146,8 @@ impl AWSComponent for DynamoDB {
                             .set_content(NavigatorContent::Records(content));
                     }
                 }
+                self.base.focus_next();
+                self.base.update_widget_states();
             }
             ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::PopupDetails(
                 title,
