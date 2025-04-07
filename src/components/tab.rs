@@ -1,15 +1,16 @@
 use crate::services::aws::TabClients;
 use crate::{
-    components::dynamodb::{ComponentFocus, DynamoDB},
+    components::dynamodb::DynamoDB,
     event_managment::event::{
         AWSServiceNavigatorEvent, ComponentActions, Event, PopupEvent, TabActions, TabEvent,
-        WidgetActions, WidgetEventType, WidgetType,
+        WidgetActions, WidgetEventType, WidgetType,DynamoDBComponentActions,S3ComponentActions,
     },
     widgets::{
         WidgetExt,
         aws_service_navigator::{AWSServiceNavigator, NavigatorContent},
         popup::PopupWidget,
     },
+    components::ComponentFocus,
 };
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::widgets::Borders;
@@ -21,7 +22,8 @@ use ratatui::{
     widgets::{Block, BorderType, Tabs, Widget},
 };
 use std::collections::HashMap;
-
+use crate::components::s3::S3Component;
+use crate::components::AWSComponent;
 // Constants
 const TAB_HEIGHT: u16 = 3;
 const POPUP_PADDING: u16 = 5;
@@ -36,7 +38,7 @@ pub struct Tab {
     pub name: String,
     popup_mod: bool,
     popup_widget: Option<Box<dyn WidgetExt>>,
-    right_widgets: HashMap<WidgetType, DynamoDB>,
+    right_widgets: HashMap<WidgetType, Box<dyn AWSComponent>>,
     left_widgets: Box<dyn WidgetExt>,
     active_right_widget: WidgetType,
     event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
@@ -50,8 +52,15 @@ impl Tab {
         content: &str,
         event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
     ) -> Self {
-        let mut right_widgets: HashMap<WidgetType, DynamoDB> = HashMap::new();
-        right_widgets.insert(WidgetType::DynamoDB, DynamoDB::new(event_sender.clone()));
+        let mut right_widgets: HashMap<WidgetType, Box<dyn AWSComponent>> = HashMap::new();
+        right_widgets.insert(
+            WidgetType::DynamoDB, 
+            Box::new(DynamoDB::new(event_sender.clone()))
+        );
+        right_widgets.insert(
+            WidgetType::S3,
+            Box::new(S3Component::new(event_sender.clone()))
+        );
 
         Self {
             name: name.to_string(),
@@ -74,6 +83,9 @@ impl Tab {
             current_focus: TabFocus::Left, // Default to left widget
             aws_clients: TabClients::new(String::new(), String::from("eu-west-1")),
         }
+    }
+    pub fn set_active_service(&mut self, service_type: WidgetType) {
+        self.active_right_widget = service_type;
     }
 
     pub fn handle_input(&mut self, event: KeyEvent) {
@@ -118,8 +130,8 @@ impl Tab {
     }
     pub async fn process_event(&mut self, tab_event: TabEvent) {
         match tab_event {
-            TabEvent::TabActions(tab_acion) => {
-                self.process_tab_action(tab_acion).await;
+            TabEvent::TabActions(tab_action) => {
+                self.process_tab_action(tab_action).await;
             }
             TabEvent::WidgetActions(widget_action) => match widget_action {
                 WidgetActions::PopupEvent(ref _popup_event) => {
@@ -147,7 +159,7 @@ impl Tab {
                         match signal {
                             WidgetActions::AWSServiceNavigatorEvent(
                                 AWSServiceNavigatorEvent::SelectedItem(selected),
-                                widget_type,
+                                _widget_type,
                             ) => {
                                 self.event_sender
                                     .send(Event::Tab(TabEvent::TabActions(
@@ -162,50 +174,134 @@ impl Tab {
                 _ => {}
             },
             TabEvent::ComponentActions(component_action) => {
-                if let Some(widget) = self.right_widgets.get_mut(&self.active_right_widget) {
-                    widget.process_event(component_action).await;
+                // Route component actions to the appropriate component based on type
+                match component_action {
+                    ComponentActions::S3ComponentActions(_) if self.active_right_widget == WidgetType::S3 => {
+                        if let Some(widget) = self.right_widgets.get_mut(&WidgetType::S3) {
+                            widget.process_event(component_action).await;
+                        }
+                    },
+                    ComponentActions::DynamoDBComponentActions(_) if self.active_right_widget == WidgetType::DynamoDB => {
+                        if let Some(widget) = self.right_widgets.get_mut(&WidgetType::DynamoDB) {
+                            widget.process_event(component_action).await;
+                        }
+                    },
+                    // Handle generic component actions that aren't specific to a component type
+                    _ => {
+                        if let Some(widget) = self.right_widgets.get_mut(&self.active_right_widget) {
+                            widget.process_event(component_action).await;
+                        }
+                    }
                 }
             }
-            _ => {}
         }
     }
-
+    
     pub async fn process_tab_action(&mut self, tab_action: TabActions) {
         match tab_action {
             TabActions::ProfileSelected(profile) => {
                 self.set_name(profile);
             }
             TabActions::AWSServiceSelected(service) => {
-                if let Some(widget) = self.right_widgets.get_mut(&self.active_right_widget) {
-                    widget.set_client(self.aws_clients.get_dynamodb_client().await.unwrap());
-                    widget.update().await;
+                match service {
+                    WidgetEventType::DynamoDB => {
+                        self.active_right_widget = WidgetType::DynamoDB;
+                        if let Some(widget) = self.right_widgets.get_mut(&WidgetType::DynamoDB) {
+                            if let Ok(client) = self.aws_clients.get_dynamodb_client().await {
+                                let dynamo = widget.as_any_mut().downcast_mut::<DynamoDB>().unwrap();
+                                dynamo.set_client(client);
+                                widget.update().await.ok();
+                            }
+                        }
+                    }
+                    WidgetEventType::S3 => {
+                        self.active_right_widget = WidgetType::S3;
+                        if let Some(widget) = self.right_widgets.get_mut(&WidgetType::S3) {
+                            if let Ok(client) = self.aws_clients.get_s3_client().await {
+                                let s3 = widget.as_any_mut().downcast_mut::<S3Component>().unwrap();
+                                s3.set_client(client);
+                                widget.update().await.ok();
+                            }
+                        }
+                    }
+                    _ => {}
                 }
             }
             TabActions::NextFocus => {
                 if self.current_focus == TabFocus::Left {
                     self.current_focus = TabFocus::Right;
+                    // Activate the right widget when switching to it
+                    if let Some(widget) = self.right_widgets.get_mut(&self.active_right_widget) {
+                        widget.set_active(true);
+                    }
                 } else {
                     if let Some(widget) = self.right_widgets.get_mut(&self.active_right_widget) {
-                        widget.get_current_focus();
                         if widget.get_current_focus() == ComponentFocus::None {
                             self.current_focus = TabFocus::Left;
                             widget.reset_focus();
+                            widget.set_active(false);
                         } else {
                             widget.set_active(true);
-                            self.current_focus = TabFocus::Right;
-                            self.event_sender
-                                .send(Event::Tab(TabEvent::ComponentActions(
-                                    ComponentActions::NextFocus,
-                                )))
-                                .unwrap();
+                            match self.active_right_widget {
+                                WidgetType::S3 => {
+                                    self.event_sender
+                                        .send(Event::Tab(TabEvent::ComponentActions(
+                                            ComponentActions::S3ComponentActions(S3ComponentActions::NextFocus),
+                                        )))
+                                        .unwrap();
+                                },
+                                WidgetType::DynamoDB => {
+                                    self.event_sender
+                                        .send(Event::Tab(TabEvent::ComponentActions(
+                                            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::NextFocus),
+                                        )))
+                                        .unwrap();
+                                },
+                                _ => {}
+                            }
                         }
                     }
                 }
             }
-            _ => {}
+            TabActions::PreviousFocus => {
+                if self.current_focus == TabFocus::Right {
+                    if let Some(widget) = self.right_widgets.get_mut(&self.active_right_widget) {
+                        if widget.get_current_focus() != ComponentFocus::Navigation {
+                            // Send previous focus to component
+                            match self.active_right_widget {
+                                WidgetType::S3 => {
+                                    self.event_sender
+                                        .send(Event::Tab(TabEvent::ComponentActions(
+                                            ComponentActions::S3ComponentActions(S3ComponentActions::PreviousFocus),
+                                        )))
+                                        .unwrap();
+                                },
+                                WidgetType::DynamoDB => {
+                                    self.event_sender
+                                        .send(Event::Tab(TabEvent::ComponentActions(
+                                            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::PreviousFocus),
+                                        )))
+                                        .unwrap();
+                                },
+                                _ => {}
+                            }
+                        } else {
+                            // Go back to left component
+                            self.current_focus = TabFocus::Left;
+                            widget.set_active(false);
+                        }
+                    }
+                } else {
+                    // If already at left, cycle to rightmost component's last focus
+                    self.current_focus = TabFocus::Right;
+                    if let Some(widget) = self.right_widgets.get_mut(&self.active_right_widget) {
+                        widget.set_active(true);
+                        widget.set_focus_to_last();
+                    }
+                }
+            }
         }
     }
-
     // Public getters and setters
     pub fn name(&self) -> &str {
         &self.name
@@ -270,7 +366,7 @@ impl Tab {
     fn render_widgets(&self, area: Rect, buf: &mut Buffer) {
         let popup_area = self.calculate_popup_area(area);
         let layout: Vec<Rect> = self.create_layout(area);
-
+    
         let left_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Plain)
@@ -281,7 +377,7 @@ impl Tab {
                     Color::DarkGray
                 }),
             );
-
+    
         let right_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Plain)
@@ -292,18 +388,18 @@ impl Tab {
                     Color::DarkGray
                 }),
             );
-
+    
         let left_inner = layout[0].inner(Margin::new(1, 1));
         let right_inner = layout[1].inner(Margin::new(1, 1));
-
+    
         left_block.render(layout[0], buf);
         right_block.render(layout[1], buf);
         self.left_widgets.render(left_inner, buf);
-
+    
         if let Some(widget) = self.right_widgets.get(&self.active_right_widget) {
             widget.render(right_inner, buf);
         }
-
+    
         if self.popup_mod {
             self.popup_widget.as_ref().map(|popup| {
                 popup.render(popup_area, buf);

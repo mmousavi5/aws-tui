@@ -37,6 +37,24 @@ pub enum TabEvent {
 
 #[derive(Clone)]
 pub enum ComponentActions {
+    S3ComponentActions(S3ComponentActions),
+    DynamoDBComponentActions(DynamoDBComponentActions),
+}
+
+#[derive(Clone)]
+pub enum S3ComponentActions {
+    ArrowUp,
+    ArrowDown,
+    NextFocus,
+    PreviousFocus,
+    SetTitle(String),
+    SetQuery(String),
+    PopupDetails(String),
+    WidgetActions(WidgetActions),
+}
+
+#[derive(Clone)]
+pub enum DynamoDBComponentActions {
     ArrowUp,
     ArrowDown,
     NextFocus,

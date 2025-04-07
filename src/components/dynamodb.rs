@@ -1,189 +1,103 @@
-use crate::event_managment::event::{AWSServiceNavigatorEvent, PopupEvent, WidgetEventType};
-use crate::event_managment::event::{
-    ComponentActions, Event, InputBoxEvent, TabEvent, WidgetActions, WidgetType,
-};
+use crate::components::{AWSComponent, ComponentFocus};
+use crate::components::aws_base_component::AWSComponentBase;
+use crate::event_managment::event::{AWSServiceNavigatorEvent, ComponentActions, Event, InputBoxEvent, PopupEvent, TabEvent, WidgetActions, WidgetEventType, WidgetType, DynamoDBComponentActions};
 use crate::services::aws::dynamo_client::DynamoDBClient;
-use crate::services::aws::s3_client::S3Client;
-use crate::widgets::WidgetExt;
-use crate::widgets::aws_service_navigator::{AWSServiceNavigator, NavigatorContent};
-use crate::widgets::input_box::InputBoxWidget;
-use crate::widgets::popup::{PopupContent, PopupWidget};
+use crate::widgets::aws_service_navigator::NavigatorContent;
+use crate::widgets::popup::PopupContent;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use ratatui::{
-    buffer::Buffer,
-    layout::{Constraint, Direction, Layout, Rect},
-    widgets::Widget,
-};
+use ratatui::{buffer::Buffer, layout::Rect};
+use std::any::Any;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-
-const TAB_HEIGHT: u16 = 3;
-const POPUP_PADDING: u16 = 5;
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ComponentFocus {
-    Navigation,
-    Input,
-    Results,
-    None,
-}
+use crate::widgets::WidgetExt;
 
 pub struct DynamoDB {
-    table_list_navigator: AWSServiceNavigator,
-    query_input: InputBoxWidget,
-    query_results_navigator: AWSServiceNavigator,
-    active: bool,
-    visible: bool,
-    event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
-    current_focus: ComponentFocus,
+    base: AWSComponentBase,
     dynamodb_client: Option<Arc<Mutex<DynamoDBClient>>>,
-    selected_table: Option<String>,
-    selected_query: Option<String>,
-    details_popup: PopupWidget,
 }
 
 impl DynamoDB {
     pub fn new(event_sender: tokio::sync::mpsc::UnboundedSender<Event>) -> Self {
         Self {
-            table_list_navigator: AWSServiceNavigator::new(
-                WidgetType::AWSServiceNavigator,
-                false,
-                event_sender.clone(),
-                NavigatorContent::Records(vec![
-                    "DynamoDB".to_string(),
-                    "S3".to_string(),
-                    "Lambda".to_string(),
-                ]),
+            base: AWSComponentBase::new(
+                event_sender.clone(), 
+                NavigatorContent::Records(vec![]),
             ),
-            query_input: InputBoxWidget::new("Query Input", false, event_sender.clone()),
-            query_results_navigator: AWSServiceNavigator::new(
-                WidgetType::QueryResultsNavigator,
-                false,
-                event_sender.clone(),
-                NavigatorContent::Records(vec![
-                    "q1".to_string(),
-                    "q2".to_string(),
-                    "q3".to_string(),
-                ]),
-            ),
-            details_popup: PopupWidget::new("Details", false, false, event_sender.clone()),
-            active: false,
-            visible: true,
-            event_sender,
-            current_focus: ComponentFocus::Navigation,
             dynamodb_client: None,
-            selected_table: None,
-            selected_query: None,
         }
     }
 
-    fn calculate_popup_area(&self, base_area: Rect) -> Rect {
-        Rect::new(
-            base_area.x + POPUP_PADDING,
-            base_area.y + POPUP_PADDING,
-            base_area.width - 2 * POPUP_PADDING,
-            base_area.height - 2 * POPUP_PADDING,
-        )
+    pub fn set_client(&mut self, dynamodb_client: Arc<Mutex<DynamoDBClient>>) {
+        self.dynamodb_client = Some(dynamodb_client);
+    }
+}
+
+#[async_trait::async_trait]
+impl AWSComponent for DynamoDB {
+    fn render(&self, area: Rect, buf: &mut Buffer) {
+        self.base.render(area, buf);
     }
 
-    pub fn render(&self, area: Rect, buf: &mut Buffer) {
-        if !self.visible {
-            return;
-        }
-        let popup_area = self.calculate_popup_area(area);
-
-        // Create a horizontal split for left and right panels
-        let horizontal_split = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Percentage(30), // Left panel - table list
-                Constraint::Percentage(70), // Right panel
-            ])
-            .split(area);
-
-        // Create a vertical split for the right panel
-        let right_vertical_split = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Percentage(15), // Query input box
-                Constraint::Percentage(85), // Query results
-            ])
-            .split(horizontal_split[1]);
-
-        // Render table list navigator (left panel)
-        self.table_list_navigator.render(horizontal_split[0], buf);
-
-        // Render query input box (top of right panel)
-        self.query_input.render(right_vertical_split[0], buf);
-
-        // Render query results navigator (bottom of right panel)
-        self.query_results_navigator
-            .render(right_vertical_split[1], buf);
-
-        if self.details_popup.is_visible() {
-            self.details_popup.render(popup_area, buf);
-        }
+    fn set_focus_to_last(&mut self) {
+        self.base.set_focus_to_last();
+        self.base.update_widget_states();
     }
 
-    pub fn handle_input(&mut self, key_event: KeyEvent) {
-        if self.details_popup.is_visible() {
-            if let Some(signal) = self.details_popup.handle_input(key_event) {
-                self.event_sender
-                    .send(Event::Tab(TabEvent::ComponentActions(
-                        ComponentActions::WidgetActions(signal),
-                    )))
+    fn handle_input(&mut self, key_event: KeyEvent) {
+        if self.base.details_popup.is_visible() {
+            if let Some(signal) = self.base.details_popup.handle_input(key_event) {
+                self.base.event_sender
+                    .send(Event::Tab(TabEvent::ComponentActions(ComponentActions::DynamoDBComponentActions(
+                        (DynamoDBComponentActions::WidgetActions(signal)),
+                    ))))
                     .unwrap();
                 return;
             }
         }
 
         match key_event.code {
-            // Standard Mac navigation
             KeyCode::Tab => {
-                self.event_sender
+                self.base.event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
-                        ComponentActions::NextFocus,
+                        ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::NextFocus),
                     )))
                     .unwrap();
             }
             KeyCode::BackTab => {
-                // Shift+Tab
-                self.event_sender
+                self.base.event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
-                        ComponentActions::PreviousFocus,
+                        ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::PreviousFocus),
                     )))
                     .unwrap();
             }
-            // Quick navigation with Option/Alt key (⌥)
             KeyCode::Char('1') if key_event.modifiers == KeyModifiers::ALT => {
-                self.current_focus = ComponentFocus::Navigation;
-                self.update_widget_states();
+                self.base.current_focus = ComponentFocus::Navigation;
+                self.base.update_widget_states();
             }
             KeyCode::Char('2') if key_event.modifiers == KeyModifiers::ALT => {
-                self.current_focus = ComponentFocus::Input;
-                self.update_widget_states();
+                self.base.current_focus = ComponentFocus::Input;
+                self.base.update_widget_states();
             }
             KeyCode::Char('3') if key_event.modifiers == KeyModifiers::ALT => {
-                self.current_focus = ComponentFocus::Results;
-                self.update_widget_states();
+                self.base.current_focus = ComponentFocus::Results;
+                self.base.update_widget_states();
             }
-            // Escape to return to navigation
             KeyCode::Esc => {
-                if self.current_focus != ComponentFocus::Navigation {
-                    self.current_focus = ComponentFocus::Navigation;
-                    self.update_widget_states();
+                if self.base.current_focus != ComponentFocus::Navigation {
+                    self.base.current_focus = ComponentFocus::Navigation;
+                    self.base.update_widget_states();
                 }
             }
             _ => {
-                if let Some(signal) = match self.current_focus {
-                    ComponentFocus::Navigation => self.table_list_navigator.handle_input(key_event),
-                    ComponentFocus::Input => self.query_input.handle_input(key_event),
-                    ComponentFocus::Results => self.query_results_navigator.handle_input(key_event),
+                if let Some(signal) = match self.base.current_focus {
+                    ComponentFocus::Navigation => self.base.navigator.handle_input(key_event),
+                    ComponentFocus::Input => self.base.input.handle_input(key_event),
+                    ComponentFocus::Results => self.base.results_navigator.handle_input(key_event),
                     ComponentFocus::None => None,
                 } {
-                    self.event_sender
+                    self.base.event_sender
                         .send(Event::Tab(TabEvent::ComponentActions(
-                            ComponentActions::WidgetActions(signal),
+                            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::WidgetActions(signal)),
                         )))
                         .unwrap();
                 }
@@ -191,76 +105,42 @@ impl DynamoDB {
         }
     }
 
-    fn update_widget_states(&mut self) {
-        self.table_list_navigator
-            .set_active(self.active & (self.current_focus == ComponentFocus::Navigation));
-        self.query_input
-            .set_active(self.active & (self.current_focus == ComponentFocus::Input));
-        self.query_results_navigator
-            .set_active(self.active & (self.current_focus == ComponentFocus::Results));
-    }
-
-    fn is_visible(&self) -> bool {
-        self.visible
-    }
-
-    pub fn set_active(&mut self, active: bool) {
-        self.active = active;
-        self.update_widget_states();
-    }
-
-    fn set_inactive(&mut self) {
-        self.active = false;
-    }
-
-    fn set_visible(&mut self, visible: bool) {
-        self.visible = visible;
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
-
-    pub async fn process_event(&mut self, event: ComponentActions) {
+    async fn process_event(&mut self, event: ComponentActions) {
         match event {
-            ComponentActions::ArrowDown => {}
-            ComponentActions::ArrowUp => {}
-            ComponentActions::SetTitle(title) => {
-                self.table_list_navigator.set_title(title.clone());
-                self.selected_table = Some(title);
+            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::SetTitle(title)) => {
+                self.base.navigator.set_title(title.clone());
+                self.base.selected_item = Some(title);
             }
-            ComponentActions::SetQuery(query) => {
-                self.query_results_navigator.set_title(query.clone());
-                self.selected_query = Some(query.clone());
-                let content = self
-                    .dynamodb_client
-                    .as_ref()
-                    .unwrap()
-                    .lock()
-                    .await
-                    .query_table(self.selected_table.clone().unwrap(), query.clone())
-                    .await
-                    .unwrap();
-                self.query_results_navigator
-                    .set_content(NavigatorContent::Records(content));
+            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::SetQuery(query)) => {
+                self.base.results_navigator.set_title(query.clone());
+                self.base.selected_query = Some(query.clone());
+                
+                if let Some(client) = &self.dynamodb_client {
+                    if let Some(selected_table) = &self.base.selected_item {
+                        let content = client
+                            .lock()
+                            .await
+                            .query_table(selected_table.clone(), query.clone())
+                            .await
+                            .unwrap_or_else(|_| vec!["Query error".to_string()]);
+                            
+                        self.base.results_navigator.set_content(NavigatorContent::Records(content));
+                    }
+                }
             }
-            ComponentActions::PopupDetails(title) => {
-                self.details_popup
-                    .set_profile_list(PopupContent::Details(title.clone()));
-                self.details_popup.set_visible(true);
-                self.details_popup.set_active(true);
+            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::PopupDetails(title)) => {
+                self.base.details_popup.set_profile_list(PopupContent::Details(title.clone()));
+                self.base.details_popup.set_visible(true);
+                self.base.details_popup.set_active(true);
             }
-            ComponentActions::NextFocus => {
-                self.focus_next();
-                self.update_widget_states();
+            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::NextFocus) => {
+                self.base.focus_next();
+                self.base.update_widget_states();
             }
-            ComponentActions::WidgetActions(widget_action) => match widget_action {
+            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::WidgetActions(widget_action)) => match widget_action {
                 WidgetActions::AWSServiceNavigatorEvent(ref _aws_navigator_event, widget_type) => {
                     if widget_type == WidgetType::AWSServiceNavigator {
-                        if let Some(signal) = self
-                            .table_list_navigator
-                            .process_event(widget_action.clone())
-                        {
+                        if let Some(signal) = self.base.navigator.process_event(widget_action.clone()) {
                             match signal {
                                 WidgetActions::AWSServiceNavigatorEvent(
                                     AWSServiceNavigatorEvent::SelectedItem(
@@ -268,9 +148,9 @@ impl DynamoDB {
                                     ),
                                     WidgetType::AWSServiceNavigator,
                                 ) => {
-                                    self.event_sender
+                                    self.base.event_sender
                                         .send(Event::Tab(TabEvent::ComponentActions(
-                                            ComponentActions::SetTitle(title.clone()),
+                                            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::SetTitle(title.clone())),
                                         )))
                                         .unwrap();
                                 }
@@ -278,10 +158,7 @@ impl DynamoDB {
                             }
                         }
                     } else if widget_type == WidgetType::QueryResultsNavigator {
-                        if let Some(signal) = self
-                            .query_results_navigator
-                            .process_event(widget_action.clone())
-                        {
+                        if let Some(signal) = self.base.results_navigator.process_event(widget_action.clone()) {
                             match signal {
                                 WidgetActions::AWSServiceNavigatorEvent(
                                     AWSServiceNavigatorEvent::SelectedItem(
@@ -289,9 +166,9 @@ impl DynamoDB {
                                     ),
                                     WidgetType::QueryResultsNavigator,
                                 ) => {
-                                    self.event_sender
+                                    self.base.event_sender
                                         .send(Event::Tab(TabEvent::ComponentActions(
-                                            ComponentActions::PopupDetails(title.clone()),
+                                            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::PopupDetails(title.clone())),
                                         )))
                                         .unwrap();
                                 }
@@ -300,23 +177,13 @@ impl DynamoDB {
                         }
                     }
                 }
-                WidgetActions::InputBoxEvent(InputBoxEvent::Written(content)) => {
-                    let content_vec: Vec<String> =
-                        content.lines().map(|line| line.to_string()).collect();
-                    self.query_results_navigator
-                        .set_content(NavigatorContent::Records(content_vec));
-                }
-                WidgetActions::PopupEvent(_) => {
-                    self.details_popup.set_visible(false);
-                    self.details_popup.set_active(false);
-                }
                 WidgetActions::InputBoxEvent(ref _input_box_event) => {
-                    if let Some(signal) = self.query_input.process_event(widget_action) {
+                    if let Some(signal) = self.base.input.process_event(widget_action) {
                         match signal {
                             WidgetActions::InputBoxEvent(InputBoxEvent::Written(content)) => {
-                                self.event_sender
+                                self.base.event_sender
                                     .send(Event::Tab(TabEvent::ComponentActions(
-                                        ComponentActions::SetQuery(content),
+                                        ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::SetQuery(content)),
                                     )))
                                     .unwrap();
                             }
@@ -324,42 +191,51 @@ impl DynamoDB {
                         }
                     }
                 }
+                WidgetActions::PopupEvent(_) => {
+                    self.base.details_popup.set_visible(false);
+                    self.base.details_popup.set_active(false);
+                }
                 _ => {}
             },
-            // Add specific DynamoDB event handling here
             _ => {}
         }
     }
 
-    pub fn get_current_focus(&self) -> ComponentFocus {
-        self.current_focus
+    fn set_active(&mut self, active: bool) {
+        self.base.active = active;
+        self.base.update_widget_states();
     }
 
-    pub fn reset_focus(&mut self) {
-        self.current_focus = ComponentFocus::Navigation;
+    fn is_active(&self) -> bool {
+        self.base.active
     }
 
-    pub fn set_client(&mut self, dynamodb_client: Arc<Mutex<DynamoDBClient>>) {
-        self.dynamodb_client = Some(dynamodb_client);
+    fn set_visible(&mut self, visible: bool) {
+        self.base.visible = visible;
     }
 
-    pub fn focus_next(&mut self) -> ComponentFocus {
-        self.current_focus = match self.current_focus {
-            ComponentFocus::Navigation => ComponentFocus::Input,
-            ComponentFocus::Input => ComponentFocus::Results,
-            ComponentFocus::Results => ComponentFocus::None,
-            ComponentFocus::None => ComponentFocus::Navigation,
-        };
-        self.current_focus
+    fn is_visible(&self) -> bool {
+        self.base.visible
     }
-    pub async fn update(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        // Update the DynamoDB tables list if client is available
+
+    async fn update(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(client) = &self.dynamodb_client {
             let client = client.lock().await;
             let tables = client.list_tables().await?;
-            self.table_list_navigator
-                .set_content(NavigatorContent::Records(tables));
+            self.base.navigator.set_content(NavigatorContent::Records(tables));
         }
         Ok(())
+    }
+
+    fn get_current_focus(&self) -> ComponentFocus {
+        self.base.current_focus
+    }
+
+    fn reset_focus(&mut self) {
+        self.base.current_focus = ComponentFocus::Navigation;
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
