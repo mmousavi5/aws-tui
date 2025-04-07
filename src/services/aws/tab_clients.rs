@@ -20,8 +20,6 @@ pub enum TabClientsError {
     AWSDynamoDBError(#[from] aws_sdk_dynamodb::Error),
     #[error("AWS CloudWatch SDK error: {0}")]
     AWSCloudWatchError(#[from] aws_sdk_cloudwatch::Error),
-    #[error("Client initialization error: {0}")]
-    InitError(String),
 }
 
 pub struct TabClients {
@@ -46,15 +44,6 @@ impl TabClients {
     pub fn set_profile(&mut self, profile: String) {
         if self.profile != profile {
             self.profile = profile;
-            self.s3_client = None;
-            self.dynamodb_client = None;
-            self.cloudwatch_client = None;
-        }
-    }
-
-    pub fn set_region(&mut self, region: String) {
-        if self.region != region {
-            self.region = region;
             self.s3_client = None;
             self.dynamodb_client = None;
             self.cloudwatch_client = None;
@@ -87,17 +76,5 @@ impl TabClients {
             self.cloudwatch_client = Some(Arc::new(Mutex::new(client)));
         }
         Ok(self.cloudwatch_client.as_ref().unwrap().clone())
-    }
-
-    pub async fn list_s3_buckets(&mut self) -> Result<Vec<String>, TabClientsError> {
-        let client = self.get_s3_client().await?;
-        let client = client.lock().await;
-        Ok(client.list_buckets().await?)
-    }
-
-    pub async fn list_dynamodb_tables(&mut self) -> Result<Vec<String>, TabClientsError> {
-        let client = self.get_dynamodb_client().await?;
-        let client = client.lock().await;
-        Ok(client.list_tables().await?)
     }
 }

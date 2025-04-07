@@ -1,8 +1,5 @@
-use crate::event_managment::event::{Event, InputBoxEvent, WidgetActions};
-use crate::{
-    event_managment::event::{ComponentActions, TabEvent},
-    widgets::WidgetExt,
-};
+use crate::event_managment::event::{InputBoxEvent, WidgetActions};
+use crate::widgets::WidgetExt;
 use clipboard::{ClipboardContext, ClipboardProvider};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Alignment;
@@ -22,30 +19,21 @@ pub struct InputBoxWidget {
     active: bool,
     visible: bool,
     title: String,
-    event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
     clipboard: Option<ClipboardContext>,
 }
 
 impl InputBoxWidget {
-    pub fn new(
-        title: &str,
-        active: bool,
-        event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
-    ) -> Self {
+    pub fn new(title: &str, active: bool) -> Self {
         Self {
             content: String::new(),
             cursor_position: 0,
             active,
             visible: true,
             title: title.to_string(),
-            event_sender,
             clipboard: ClipboardProvider::new().ok(),
         }
     }
 
-    pub fn get_content(&self) -> &str {
-        &self.content
-    }
     fn paste_from_clipboard(&mut self) {
         if let Some(ref mut ctx) = self.clipboard {
             if let Ok(contents) = ctx.get_contents() {
@@ -187,6 +175,6 @@ impl WidgetExt for InputBoxWidget {
         self.active
     }
     fn set_title(&mut self, title: String) {
-        todo!()
+        self.title = title;
     }
 }

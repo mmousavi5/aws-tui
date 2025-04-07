@@ -1,5 +1,5 @@
 use crate::{
-    event_managment::event::{Event, PopupEvent, TabActions, TabEvent, WidgetActions},
+    event_managment::event::{PopupEvent, WidgetActions},
     services::read_config,
     widgets::WidgetExt,
 };
@@ -16,7 +16,6 @@ use ratatui::{
 use serde_json;
 use std::any::Any;
 
-const POPUP_MARGIN: u16 = 5;
 const MIN_POPUP_WIDTH: u16 = 20;
 const MIN_POPUP_HEIGHT: u16 = 10;
 
@@ -50,16 +49,10 @@ pub struct PopupWidget {
     selected_index: usize,
     active: bool,
     visible: bool,
-    event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
 }
 
 impl PopupWidget {
-    pub fn new(
-        title: &str,
-        visible: bool,
-        active: bool,
-        event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
-    ) -> Self {
+    pub fn new(title: &str, visible: bool, active: bool) -> Self {
         let profiles = match read_config::get_aws_profiles() {
             Ok(profiles) => PopupContent::Profiles(profiles),
             Err(_) => PopupContent::Profiles(vec!["No profiles found".to_string()]),
@@ -72,7 +65,6 @@ impl PopupWidget {
             selected_index: 0,
             active,
             visible,
-            event_sender,
         }
     }
     pub fn set_profile_list(&mut self, profiles: PopupContent) {
@@ -272,6 +264,6 @@ impl WidgetExt for PopupWidget {
         self.active
     }
     fn set_title(&mut self, title: String) {
-        todo!()
+        self.title = title;
     }
 }

@@ -1,8 +1,8 @@
 use crate::components::aws_base_component::AWSComponentBase;
 use crate::components::{AWSComponent, ComponentFocus};
 use crate::event_managment::event::{
-    AWSServiceNavigatorEvent, ComponentActions, Event, InputBoxEvent, PopupEvent,
-    S3ComponentActions, TabEvent, WidgetActions, WidgetEventType, WidgetType,
+    AWSServiceNavigatorEvent, ComponentActions, Event, InputBoxEvent, S3ComponentActions, TabEvent,
+    WidgetActions, WidgetEventType, WidgetType,
 };
 use crate::services::aws::s3_client::S3Client;
 use crate::widgets::WidgetExt;

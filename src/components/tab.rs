@@ -75,15 +75,9 @@ impl Tab {
             left_widgets: Box::new(AWSServiceNavigator::new(
                 WidgetType::AWSServiceNavigator,
                 false,
-                event_sender.clone(),
                 NavigatorContent::Services(WidgetEventType::VALUES.to_vec()),
             )),
-            popup_widget: Some(Box::new(PopupWidget::new(
-                content,
-                true,
-                true,
-                event_sender.clone(),
-            ))),
+            popup_widget: Some(Box::new(PopupWidget::new(content, true, true))),
             right_widgets,
             active_right_widget: WidgetType::DynamoDB,
             event_sender,

@@ -1,17 +1,8 @@
 use crate::app::App;
-use ratatui::{
-    buffer::Buffer,
-    layout::{Alignment, Rect},
-    widgets::{Block, BorderType, Widget},
-};
+use ratatui::{buffer::Buffer, layout::Rect, widgets::Widget};
 
 impl Widget for &App {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let block = Block::bordered()
-            .title("tab-toolbar")
-            .title_alignment(Alignment::Center)
-            .border_type(BorderType::Rounded);
-
         let all_tabs_names = self
             .tabs
             .iter()

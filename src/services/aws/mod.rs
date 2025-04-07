@@ -3,7 +3,7 @@ pub mod dynamo_client;
 pub mod s3_client;
 mod tab_clients;
 
-pub use tab_clients::{TabClients, TabClientsError};
+pub use tab_clients::TabClients;
 
 use super::aws::cloudwatch_client::CloudWatchClientError;
 use super::aws::dynamo_client::DynamoDBClientError;
@@ -18,6 +18,4 @@ pub enum ClientError {
     AWSS3Error(#[from] S3ClientError),
     #[error("AWS CloudWatch error: {0}")]
     AWSCloudWatchError(#[from] CloudWatchClientError),
-    #[error("Secret not found")]
-    GeneralError,
 }

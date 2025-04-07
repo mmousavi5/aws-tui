@@ -1,6 +1,6 @@
 use aws_config::{BehaviorVersion, Region};
 use aws_sdk_cloudwatchlogs::error::SdkError;
-use aws_sdk_cloudwatchlogs::{Client, Error as CloudWatchLogsError, config};
+use aws_sdk_cloudwatchlogs::{Client, config};
 use std::time::Duration;
 use thiserror::Error;
 
@@ -11,9 +11,6 @@ pub enum CloudWatchClientError {
 
     #[error("Failed to connect with profile: {0}")]
     ConnectionFailed(String),
-
-    #[error("No logs found matching filter")]
-    NoItemsFound,
 }
 
 // Implement From traits for SDK errors

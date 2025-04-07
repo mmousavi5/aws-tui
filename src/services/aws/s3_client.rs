@@ -1,13 +1,7 @@
 use aws_config::{BehaviorVersion, Region};
+use aws_sdk_s3::Client;
 use aws_sdk_s3::error::SdkError;
-use aws_sdk_s3::operation::head_object::HeadObjectError;
-use aws_sdk_s3::operation::list_buckets::ListBucketsError;
-use aws_sdk_s3::operation::list_objects_v2::ListObjectsV2Error;
-use aws_sdk_s3::types::{Bucket, Object};
-use aws_sdk_s3::{Client, Error as S3Error};
-use aws_smithy_runtime_api::client::result::SdkError as SmithySdkError;
-use serde_json::{Value, json};
-use std::fmt;
+use serde_json::json;
 use std::time::Duration;
 use thiserror::Error;
 
@@ -18,9 +12,6 @@ pub enum S3ClientError {
 
     #[error("Failed to connect with profile: {0}")]
     ConnectionFailed(String),
-
-    #[error("No objects found in bucket matching prefix")]
-    NoObjectsFound,
 
     #[error("Serialization error: {0}")]
     SerializationError(String),

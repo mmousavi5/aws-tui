@@ -1,15 +1,13 @@
-use crate::components::{AWSComponent, ComponentFocus};
-use crate::event_managment::event::{ComponentActions, Event, WidgetActions};
+use crate::components::ComponentFocus;
+use crate::event_managment::event::Event;
 use crate::widgets::WidgetExt;
 use crate::widgets::aws_service_navigator::{AWSServiceNavigator, NavigatorContent};
 use crate::widgets::input_box::InputBoxWidget;
-use crate::widgets::popup::{PopupContent, PopupWidget};
-use crossterm::event::KeyEvent;
+use crate::widgets::popup::PopupWidget;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
 };
-use std::any::Any;
 
 pub struct AWSComponentBase {
     pub navigator: AWSServiceNavigator,
@@ -33,17 +31,15 @@ impl AWSComponentBase {
             navigator: AWSServiceNavigator::new(
                 crate::event_managment::event::WidgetType::AWSServiceNavigator,
                 false,
-                event_sender.clone(),
                 navigator_content,
             ),
-            input: InputBoxWidget::new("Query Input", false, event_sender.clone()),
+            input: InputBoxWidget::new("Query Input", false),
             results_navigator: AWSServiceNavigator::new(
                 crate::event_managment::event::WidgetType::QueryResultsNavigator,
                 false,
-                event_sender.clone(),
                 NavigatorContent::Records(vec![]),
             ),
-            details_popup: PopupWidget::new("Details", false, false, event_sender.clone()),
+            details_popup: PopupWidget::new("Details", false, false),
             active: false,
             visible: true,
             event_sender,

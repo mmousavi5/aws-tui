@@ -3,11 +3,10 @@ pub(crate) mod cloudwatch;
 pub(crate) mod dynamodb;
 pub(crate) mod s3;
 pub(crate) mod tab;
-use crate::event_managment::event::{ComponentActions, Event, WidgetActions};
+use crate::event_managment::event::ComponentActions;
 use crossterm::event::KeyEvent;
 use ratatui::{buffer::Buffer, layout::Rect};
 use std::any::Any;
-use tokio::sync::mpsc::UnboundedSender;
 
 /// Common trait for all AWS service components
 #[async_trait::async_trait]

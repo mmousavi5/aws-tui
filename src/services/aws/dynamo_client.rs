@@ -133,7 +133,6 @@ impl DynamoDBClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aws_config::profile::Profile;
 
     #[tokio::test]
     async fn test_list_tables() {

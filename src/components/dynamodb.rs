@@ -2,7 +2,7 @@ use crate::components::aws_base_component::AWSComponentBase;
 use crate::components::{AWSComponent, ComponentFocus};
 use crate::event_managment::event::{
     AWSServiceNavigatorEvent, ComponentActions, DynamoDBComponentActions, Event, InputBoxEvent,
-    PopupEvent, TabEvent, WidgetActions, WidgetEventType, WidgetType,
+    TabEvent, WidgetActions, WidgetEventType, WidgetType,
 };
 use crate::services::aws::dynamo_client::DynamoDBClient;
 use crate::widgets::WidgetExt;
@@ -50,7 +50,7 @@ impl AWSComponent for DynamoDB {
                     .event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
                         ComponentActions::DynamoDBComponentActions(
-                            (DynamoDBComponentActions::WidgetActions(signal)),
+                            DynamoDBComponentActions::WidgetActions(signal),
                         ),
                     )))
                     .unwrap();

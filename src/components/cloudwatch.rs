@@ -293,7 +293,7 @@ impl AWSComponent for CloudWatch {
                                 signal
                             {
                                 // Use input content to filter logs
-                                if let Some(log_group) = &self.selected_log_group {
+                                if let Some(_) = &self.selected_log_group {
                                     self.base
                                         .event_sender
                                         .send(Event::Tab(TabEvent::ComponentActions(
@@ -312,7 +312,6 @@ impl AWSComponent for CloudWatch {
                     }
                     _ => {}
                 },
-                _ => {}
             },
             _ => {} // Ignore other component actions that don't belong to CloudWatch
         }
