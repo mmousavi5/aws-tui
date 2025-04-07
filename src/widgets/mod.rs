@@ -18,4 +18,5 @@ pub trait WidgetExt {
     fn process_event(&mut self, event: WidgetActions) -> Option<WidgetActions>;
     fn is_active(&self) -> bool;
     fn set_title(&mut self, title: String);
+    fn get_help_items(&self) -> Vec<(String, String)>;
 }

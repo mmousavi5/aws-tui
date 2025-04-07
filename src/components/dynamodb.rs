@@ -281,4 +281,9 @@ impl AWSComponent for DynamoDB {
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
+
+    fn get_help_items(&self) -> Vec<(String, String)> {
+        // Return help items based on the base component's state
+        self.base.get_help_items()
+    }
 }

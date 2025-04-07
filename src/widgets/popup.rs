@@ -260,6 +260,25 @@ impl WidgetExt for PopupWidget {
             _ => None,
         }
     }
+
+    fn get_help_items(&self) -> Vec<(String, String)> {
+        let mut items = vec![];
+
+        match self.profile_list {
+            PopupContent::Profiles(_) => {
+                items.push(("Enter".to_string(), "Select profile".to_string()));
+            }
+            PopupContent::Details(_) => {
+                items.push(("PgUp/PgDn".to_string(), "Scroll content".to_string()));
+            }
+        }
+
+        items.push(("Esc".to_string(), "Close popup".to_string()));
+        items.push(("↑/↓".to_string(), "Navigate".to_string()));
+
+        items
+    }
+
     fn is_active(&self) -> bool {
         self.active
     }

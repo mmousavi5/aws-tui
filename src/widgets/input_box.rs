@@ -178,6 +178,14 @@ impl WidgetExt for InputBoxWidget {
             _ => None,
         }
     }
+    fn get_help_items(&self) -> Vec<(String, String)> {
+        vec![
+            ("Ctrl+V".to_string(), "Paste".to_string()),
+            ("Ctrl+C".to_string(), "Copy".to_string()),
+            ("Enter".to_string(), "Submit".to_string()),
+            ("Esc".to_string(), "Close".to_string()),
+        ]
+    }
     fn is_active(&self) -> bool {
         self.active
     }

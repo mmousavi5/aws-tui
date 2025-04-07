@@ -467,4 +467,8 @@ impl AWSComponent for S3Component {
         self.base.set_focus_to_last();
         self.base.update_widget_states();
     }
+    fn get_help_items(&self) -> Vec<(String, String)> {
+        // Return help items based on the base component's state
+        self.base.get_help_items()
+    }
 }

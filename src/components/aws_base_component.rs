@@ -115,4 +115,39 @@ impl AWSComponentBase {
         self.current_focus = ComponentFocus::Results;
         self.current_focus
     }
+
+    pub fn get_help_items(&self) -> Vec<(String, String)> {
+        let mut items = vec![];
+
+        // Check if the popup is visible
+        if self.details_popup.is_visible() {
+            items.push(("Esc".to_string(), "Close details".to_string()));
+            items.push(("PgUp/PgDn".to_string(), "Scroll content".to_string()));
+            return items;
+        }
+
+        // Different help items based on current focus
+        match self.current_focus {
+            ComponentFocus::Navigation => {
+                items.push(("Enter".to_string(), "Select log group".to_string()));
+                items.push(("Alt+2".to_string(), "Focus results".to_string()));
+                items.push(("Alt+3".to_string(), "Focus input".to_string()));
+            }
+            ComponentFocus::Results => {
+                items.push(("Enter".to_string(), "View log details".to_string()));
+                items.push(("Alt+1".to_string(), "Focus log groups".to_string()));
+                items.push(("Alt+3".to_string(), "Focus input".to_string()));
+            }
+            ComponentFocus::Input => {
+                items.push(("Enter".to_string(), "Search logs".to_string()));
+                items.push(("Alt+1".to_string(), "Focus log groups".to_string()));
+                items.push(("Alt+2".to_string(), "Focus results".to_string()));
+            }
+            _ => {}
+        }
+
+        items.push(("Tab".to_string(), "Switch focus".to_string()));
+
+        items
+    }
 }

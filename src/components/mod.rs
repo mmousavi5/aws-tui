@@ -45,6 +45,7 @@ pub trait AWSComponent: Send {
     fn as_any_mut(&mut self) -> &mut dyn Any;
 
     fn set_focus_to_last(&mut self);
+    fn get_help_items(&self) -> Vec<(String, String)>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

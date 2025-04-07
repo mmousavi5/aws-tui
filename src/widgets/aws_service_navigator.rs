@@ -28,15 +28,11 @@ pub struct AWSServiceNavigator {
     scroll_offset: usize,
     active: bool,
     visible: bool,
-    filter_mode: bool,                  // Track if we're in filter mode
+    filter_mode: bool, // Track if we're in filter mode
 }
 
 impl AWSServiceNavigator {
-    pub fn new(
-        widget_type: WidgetType, 
-        active: bool, 
-        content: NavigatorContent
-    ) -> Self {
+    pub fn new(widget_type: WidgetType, active: bool, content: NavigatorContent) -> Self {
         Self {
             title: "AWS Services".to_string(),
             widget_type,
@@ -76,9 +72,9 @@ impl AWSServiceNavigator {
                 if self.selected_index < records.len() {
                     records.get(self.selected_index).map(|record| {
                         WidgetActions::AWSServiceNavigatorEvent(
-                            AWSServiceNavigatorEvent::SelectedItem(WidgetEventType::RecordSelected(
-                                record.clone(),
-                            )),
+                            AWSServiceNavigatorEvent::SelectedItem(
+                                WidgetEventType::RecordSelected(record.clone()),
+                            ),
                             self.widget_type,
                         )
                     })
@@ -110,24 +106,27 @@ impl AWSServiceNavigator {
     // Apply a filter to the content
     pub fn apply_filter(&mut self, filter: &str) {
         self.filter_text = filter.to_lowercase();
-        
+
         // Reset navigation state when filter changes
         self.selected_index = 0;
         self.scroll_offset = 0;
-        
+
         // If filter is empty, show all content
         if self.filter_text.is_empty() {
             self.filtered_content = self.content.clone();
             return;
         }
-        
+
         // Apply filter based on content type
         match &self.content {
             NavigatorContent::Services(services) => {
                 let filtered = services
                     .iter()
                     .filter(|service| {
-                        service.to_string().to_lowercase().contains(&self.filter_text)
+                        service
+                            .to_string()
+                            .to_lowercase()
+                            .contains(&self.filter_text)
                     })
                     .cloned()
                     .collect();
@@ -136,9 +135,7 @@ impl AWSServiceNavigator {
             NavigatorContent::Records(records) => {
                 let filtered = records
                     .iter()
-                    .filter(|record| {
-                        record.to_lowercase().contains(&self.filter_text)
-                    })
+                    .filter(|record| record.to_lowercase().contains(&self.filter_text))
                     .cloned()
                     .collect();
                 self.filtered_content = NavigatorContent::Records(filtered);
@@ -155,11 +152,11 @@ impl AWSServiceNavigator {
 
     // Remove last character from filter and apply it
     fn remove_from_filter(&mut self) {
-            if let Some(_) = self.filter_text.pop() {
-                let filter_text_clone = self.filter_text.clone();
-                self.apply_filter(&filter_text_clone);
-            }
+        if let Some(_) = self.filter_text.pop() {
+            let filter_text_clone = self.filter_text.clone();
+            self.apply_filter(&filter_text_clone);
         }
+    }
 
     // Reset filter
     fn clear_filter(&mut self) {
@@ -170,7 +167,7 @@ impl AWSServiceNavigator {
 
     pub fn set_content(&mut self, content: NavigatorContent) {
         self.content = content.clone();
-        
+
         // Apply existing filter to new content
         if !self.filter_text.is_empty() {
             let filter_text_clone = self.filter_text.clone();
@@ -178,7 +175,7 @@ impl AWSServiceNavigator {
         } else {
             self.filtered_content = content;
         }
-        
+
         self.selected_index = 0;
         self.scroll_offset = 0;
     }
@@ -242,7 +239,7 @@ impl WidgetExt for AWSServiceNavigator {
             } else {
                 "No items available"
             };
-            
+
             let paragraph = Paragraph::new(message)
                 .alignment(Alignment::Center)
                 .style(Style::default().fg(Color::Yellow));
@@ -265,11 +262,15 @@ impl WidgetExt for AWSServiceNavigator {
 
         // Calculate how many elements to show based on available height and scroll indicators
         let filter_bar_height = if self.filter_mode { 1 } else { 0 };
-        let scroll_indicators_height = 
-            if self.scroll_offset > 0 { 1 } else { 0 } +
-            if self.scroll_offset + visible_height < total_items { 1 } else { 0 };
-        
-        let available_height = visible_height.saturating_sub(scroll_indicators_height + filter_bar_height);
+        let scroll_indicators_height = if self.scroll_offset > 0 { 1 } else { 0 }
+            + if self.scroll_offset + visible_height < total_items {
+                1
+            } else {
+                0
+            };
+
+        let available_height =
+            visible_height.saturating_sub(scroll_indicators_height + filter_bar_height);
 
         // Add visible items with proper scrolling
         match &self.filtered_content {
@@ -290,10 +291,10 @@ impl WidgetExt for AWSServiceNavigator {
                                 format!("  {}", service)
                             }
                         });
-                    
+
                     content_lines.extend(visible_services);
                 }
-            },
+            }
             NavigatorContent::Records(records) => {
                 if records.is_empty() && !self.filter_text.is_empty() {
                     content_lines.push("No matching records found".to_string());
@@ -311,12 +312,12 @@ impl WidgetExt for AWSServiceNavigator {
                                 format!("  {}", record)
                             }
                         });
-                    
+
                     content_lines.extend(visible_records);
                 }
             }
         }
-        
+
         // Add scroll down indicator if needed
         if self.scroll_offset + available_height < total_items {
             content_lines.push("▼ Scroll down for more".to_string());
@@ -336,34 +337,36 @@ impl WidgetExt for AWSServiceNavigator {
                     if !key_event.modifiers.contains(KeyModifiers::CONTROL) {
                         self.add_to_filter(c);
                     }
-                    Some(WidgetActions::InputBoxEvent(InputBoxEvent::Written(self.filter_text.clone())))
-                },
+                    Some(WidgetActions::InputBoxEvent(InputBoxEvent::Written(
+                        self.filter_text.clone(),
+                    )))
+                }
                 KeyCode::Backspace => {
                     // Remove last character from filter
                     self.remove_from_filter();
                     Some(WidgetActions::InputBoxEvent(InputBoxEvent::Backspace))
-                },
+                }
                 KeyCode::Delete => {
                     // Also remove character
                     self.remove_from_filter();
                     Some(WidgetActions::InputBoxEvent(InputBoxEvent::Delete))
-                },
+                }
                 KeyCode::Esc => {
                     // Exit filter mode but keep the current filter
                     self.filter_mode = false;
                     Some(WidgetActions::AWSServiceNavigatorEvent(
-                        AWSServiceNavigatorEvent::Escape, 
-                        self.widget_type.clone()
+                        AWSServiceNavigatorEvent::Escape,
+                        self.widget_type.clone(),
                     ))
-                },
+                }
                 KeyCode::Enter => {
                     // Exit filter mode and keep the filter
                     self.filter_mode = false;
                     Some(WidgetActions::AWSServiceNavigatorEvent(
-                        AWSServiceNavigatorEvent::Enter, 
-                        self.widget_type.clone()
+                        AWSServiceNavigatorEvent::Enter,
+                        self.widget_type.clone(),
                     ))
-                },
+                }
                 _ => None,
             }
         } else {
@@ -373,30 +376,29 @@ impl WidgetExt for AWSServiceNavigator {
                     // Enter filter mode with Ctrl+F
                     self.filter_mode = true;
                     Some(WidgetActions::AWSServiceNavigatorEvent(
-                        AWSServiceNavigatorEvent::Enter, 
-                        self.widget_type.clone()
+                        AWSServiceNavigatorEvent::Enter,
+                        self.widget_type.clone(),
                     ))
-                },
+                }
                 KeyCode::Char('/') => {
                     // Alternative way to enter filter mode
                     self.filter_mode = true;
                     Some(WidgetActions::AWSServiceNavigatorEvent(
-                        AWSServiceNavigatorEvent::Enter, 
-                        self.widget_type.clone()
+                        AWSServiceNavigatorEvent::Enter,
+                        self.widget_type.clone(),
                     ))
-                },
+                }
                 KeyCode::Esc => {
                     // Clear filter with escape when not in filter mode
                     if !self.filter_text.is_empty() {
-                        self.clear_filter();
                         Some(WidgetActions::AWSServiceNavigatorEvent(
-                            AWSServiceNavigatorEvent::Escape, 
-                            self.widget_type.clone()
+                            AWSServiceNavigatorEvent::Escape,
+                            self.widget_type.clone(),
                         ))
                     } else {
                         None
                     }
-                },
+                }
                 KeyCode::Up => {
                     if self.selected_index > 0 {
                         self.selected_index -= 1;
@@ -406,7 +408,7 @@ impl WidgetExt for AWSServiceNavigator {
                         AWSServiceNavigatorEvent::ArrowUp,
                         self.widget_type.clone(),
                     ))
-                },
+                }
                 KeyCode::Down => {
                     let content_len = self.content_len();
                     if content_len > 0 && self.selected_index < content_len - 1 {
@@ -417,7 +419,7 @@ impl WidgetExt for AWSServiceNavigator {
                         AWSServiceNavigatorEvent::ArrowDown,
                         self.widget_type.clone(),
                     ))
-                },
+                }
                 KeyCode::PageUp => {
                     // Jump multiple lines up
                     let jump_size = 5;
@@ -429,20 +431,21 @@ impl WidgetExt for AWSServiceNavigator {
                         AWSServiceNavigatorEvent::PageUp,
                         self.widget_type.clone(),
                     ))
-                },
+                }
                 KeyCode::PageDown => {
                     // Jump multiple lines down
                     let jump_size = 5;
                     let content_len = self.content_len();
                     if content_len > 0 && self.selected_index < content_len - 1 {
-                        self.selected_index = (self.selected_index + jump_size).min(content_len - 1);
+                        self.selected_index =
+                            (self.selected_index + jump_size).min(content_len - 1);
                         self.update_scroll_offset(10); // Will be refined in render
                     }
                     Some(WidgetActions::AWSServiceNavigatorEvent(
                         AWSServiceNavigatorEvent::PageDown,
                         self.widget_type.clone(),
                     ))
-                },
+                }
                 KeyCode::Enter => Some(WidgetActions::AWSServiceNavigatorEvent(
                     AWSServiceNavigatorEvent::Enter,
                     self.widget_type.clone(),
@@ -457,7 +460,7 @@ impl WidgetExt for AWSServiceNavigator {
                         AWSServiceNavigatorEvent::Home,
                         self.widget_type.clone(),
                     ))
-                },
+                }
                 KeyCode::End => {
                     // Jump to end
                     let content_len = self.content_len();
@@ -469,7 +472,7 @@ impl WidgetExt for AWSServiceNavigator {
                         AWSServiceNavigatorEvent::End,
                         self.widget_type.clone(),
                     ))
-                },
+                }
                 _ => None,
             }
         }
@@ -504,7 +507,10 @@ impl WidgetExt for AWSServiceNavigator {
                 }
                 AWSServiceNavigatorEvent::Enter => self.selected_item(),
                 AWSServiceNavigatorEvent::Escape => {
-                    self.filter_mode = false;
+                    if self.filter_mode {
+                        self.filter_mode = false;
+                        self.clear_filter(); // Clear the filter text when exiting filter mode
+                    }
                     None
                 }
                 _ => None,
@@ -526,6 +532,31 @@ impl WidgetExt for AWSServiceNavigator {
             },
             _ => None,
         }
+    }
+
+    fn get_help_items(&self) -> Vec<(String, String)> {
+        let mut items = vec![];
+
+        if self.filter_mode {
+            // Filter mode help
+            items.push(("Type".to_string(), "Filter".to_string()));
+            items.push(("Esc".to_string(), "Exit filter".to_string()));
+            items.push(("Enter".to_string(), "Apply filter".to_string()));
+        } else {
+            // Standard navigation help
+            items.push(("Enter".to_string(), "Select".to_string()));
+            items.push(("Ctrl+F".to_string(), "Filter".to_string()));
+
+            if !self.filter_text.is_empty() {
+                items.push(("Esc".to_string(), "Clear filter".to_string()));
+            }
+
+            items.push(("↑/↓".to_string(), "Navigate".to_string()));
+            items.push(("PgUp/PgDn".to_string(), "Scroll".to_string()));
+            items.push(("Home/End".to_string(), "Jump to start/end".to_string()));
+        }
+
+        items
     }
 
     fn is_visible(&self) -> bool {

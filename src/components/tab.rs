@@ -21,15 +21,16 @@ use ratatui::widgets::Borders;
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Tabs, Widget},
+    widgets::{Block, BorderType, Paragraph, Tabs, Widget},
 };
 use std::collections::HashMap;
 
 // Constants
 const TAB_HEIGHT: u16 = 3;
 const POPUP_PADDING: u16 = 5;
+const HELP_HEIGHT: u16 = 2;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TabFocus {
@@ -366,7 +367,80 @@ impl Tab {
         self.render_tab_bar(area, buf, tab_titles, active_tab);
         let content_area = self.get_content_area(area);
 
-        self.render_widgets(content_area, buf);
+        // Create a layout that includes space for the help toolbar at the bottom
+        let main_layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Min(1),              // Main content
+                Constraint::Length(HELP_HEIGHT), // Help toolbar
+            ])
+            .split(content_area);
+
+        // Render the main widgets in the upper area
+        self.render_widgets(main_layout[0], buf);
+
+        // Render the help toolbar in the lower area
+        self.render_help_toolbar(main_layout[1], buf);
+    }
+
+    // Update the render_help_toolbar method
+
+    fn render_help_toolbar(&self, area: Rect, buf: &mut Buffer) {
+        let help_style = Style::default().fg(Color::DarkGray);
+        let key_style = Style::default()
+            .fg(Color::White)
+            .add_modifier(Modifier::BOLD);
+
+        // Get help items from the active component or widget
+        let mut help_items = Vec::new();
+
+        // If popup is active, get help from popup
+        if self.popup_mod && self.popup_widget.is_some() {
+            if let Some(popup) = &self.popup_widget {
+                help_items = popup.get_help_items();
+            }
+        } else {
+            match self.current_focus {
+                TabFocus::Left => {
+                    // Get help items from left widget (AWSServiceNavigator)
+                    help_items = self.left_widgets.get_help_items();
+                }
+                TabFocus::Right => {
+                    // Get help items from active right component based on its type
+                    if let Some(widget) = self.right_widgets.get(&self.active_right_widget) {
+                        help_items = widget.get_help_items();
+                    }
+                }
+            }
+
+            // Always add global shortcuts if not in popup mode
+            if !self.popup_mod {
+                help_items.push(("Tab".to_string(), "Switch focus".to_string()));
+            }
+        }
+
+        // Convert help items to styled spans
+        let mut help_text = Vec::new();
+        for (i, (key, description)) in help_items.iter().enumerate() {
+            if i > 0 {
+                help_text.push(Span::styled("  ", help_style));
+            }
+            help_text.push(Span::styled(key, key_style));
+            help_text.push(Span::styled(format!(":{}", description), help_style));
+        }
+
+        // Create the help bar
+        let help_paragraph = Paragraph::new(Line::from(help_text))
+            .style(help_style)
+            .alignment(Alignment::Left)
+            .block(
+                Block::default()
+                    .borders(ratatui::widgets::Borders::TOP)
+                    .border_style(Style::default().fg(Color::DarkGray)),
+            );
+
+        // Render the help toolbar
+        help_paragraph.render(area, buf);
     }
 
     fn render_tab_bar(
