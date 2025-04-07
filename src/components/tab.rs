@@ -1,16 +1,20 @@
+use crate::components::AWSComponent;
+use crate::components::cloudwatch::CloudWatch;
+use crate::components::s3::S3Component;
 use crate::services::aws::TabClients;
 use crate::{
+    components::ComponentFocus,
     components::dynamodb::DynamoDB,
     event_managment::event::{
-        AWSServiceNavigatorEvent, ComponentActions, Event, PopupEvent, TabActions, TabEvent,
-        WidgetActions, WidgetEventType, WidgetType,DynamoDBComponentActions,S3ComponentActions,CloudWatchComponentActions,
+        AWSServiceNavigatorEvent, CloudWatchComponentActions, ComponentActions,
+        DynamoDBComponentActions, Event, PopupEvent, S3ComponentActions, TabActions, TabEvent,
+        WidgetActions, WidgetEventType, WidgetType,
     },
     widgets::{
         WidgetExt,
         aws_service_navigator::{AWSServiceNavigator, NavigatorContent},
         popup::PopupWidget,
     },
-    components::ComponentFocus,
 };
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::widgets::Borders;
@@ -22,9 +26,6 @@ use ratatui::{
     widgets::{Block, BorderType, Tabs, Widget},
 };
 use std::collections::HashMap;
-use crate::components::s3::S3Component;
-use crate::components::AWSComponent;
-use crate::components::cloudwatch::CloudWatch;
 
 // Constants
 const TAB_HEIGHT: u16 = 3;
@@ -56,16 +57,16 @@ impl Tab {
     ) -> Self {
         let mut right_widgets: HashMap<WidgetType, Box<dyn AWSComponent>> = HashMap::new();
         right_widgets.insert(
-            WidgetType::DynamoDB, 
-            Box::new(DynamoDB::new(event_sender.clone()))
+            WidgetType::DynamoDB,
+            Box::new(DynamoDB::new(event_sender.clone())),
         );
         right_widgets.insert(
             WidgetType::S3,
-            Box::new(S3Component::new(event_sender.clone()))
+            Box::new(S3Component::new(event_sender.clone())),
         );
         right_widgets.insert(
             WidgetType::CloudWatch,
-            Box::new(CloudWatch::new(event_sender.clone()))
+            Box::new(CloudWatch::new(event_sender.clone())),
         );
 
         Self {
@@ -182,24 +183,31 @@ impl Tab {
             TabEvent::ComponentActions(component_action) => {
                 // Route component actions to the appropriate component based on type
                 match component_action {
-                    ComponentActions::S3ComponentActions(_) if self.active_right_widget == WidgetType::S3 => {
+                    ComponentActions::S3ComponentActions(_)
+                        if self.active_right_widget == WidgetType::S3 =>
+                    {
                         if let Some(widget) = self.right_widgets.get_mut(&WidgetType::S3) {
                             widget.process_event(component_action).await;
                         }
-                    },
-                    ComponentActions::DynamoDBComponentActions(_) if self.active_right_widget == WidgetType::DynamoDB => {
+                    }
+                    ComponentActions::DynamoDBComponentActions(_)
+                        if self.active_right_widget == WidgetType::DynamoDB =>
+                    {
                         if let Some(widget) = self.right_widgets.get_mut(&WidgetType::DynamoDB) {
                             widget.process_event(component_action).await;
                         }
-                    },
-                    ComponentActions::CloudWatchComponentActions(_) if self.active_right_widget == WidgetType::CloudWatch => {
+                    }
+                    ComponentActions::CloudWatchComponentActions(_)
+                        if self.active_right_widget == WidgetType::CloudWatch =>
+                    {
                         if let Some(widget) = self.right_widgets.get_mut(&WidgetType::CloudWatch) {
                             widget.process_event(component_action).await;
                         }
-                    },
+                    }
                     // Handle generic component actions that aren't specific to a component type
                     _ => {
-                        if let Some(widget) = self.right_widgets.get_mut(&self.active_right_widget) {
+                        if let Some(widget) = self.right_widgets.get_mut(&self.active_right_widget)
+                        {
                             widget.process_event(component_action).await;
                         }
                     }
@@ -207,47 +215,46 @@ impl Tab {
             }
         }
     }
-    
+
     pub async fn process_tab_action(&mut self, tab_action: TabActions) {
         match tab_action {
             TabActions::ProfileSelected(profile) => {
                 self.set_name(profile);
             }
-            TabActions::AWSServiceSelected(service) => {
-                match service {
-                    WidgetEventType::DynamoDB => {
-                        self.active_right_widget = WidgetType::DynamoDB;
-                        if let Some(widget) = self.right_widgets.get_mut(&WidgetType::DynamoDB) {
-                            if let Ok(client) = self.aws_clients.get_dynamodb_client().await {
-                                let dynamo = widget.as_any_mut().downcast_mut::<DynamoDB>().unwrap();
-                                dynamo.set_client(client);
-                                widget.update().await.ok();
-                            }
+            TabActions::AWSServiceSelected(service) => match service {
+                WidgetEventType::DynamoDB => {
+                    self.active_right_widget = WidgetType::DynamoDB;
+                    if let Some(widget) = self.right_widgets.get_mut(&WidgetType::DynamoDB) {
+                        if let Ok(client) = self.aws_clients.get_dynamodb_client().await {
+                            let dynamo = widget.as_any_mut().downcast_mut::<DynamoDB>().unwrap();
+                            dynamo.set_client(client);
+                            widget.update().await.ok();
                         }
                     }
-                    WidgetEventType::S3 => {
-                        self.active_right_widget = WidgetType::S3;
-                        if let Some(widget) = self.right_widgets.get_mut(&WidgetType::S3) {
-                            if let Ok(client) = self.aws_clients.get_s3_client().await {
-                                let s3 = widget.as_any_mut().downcast_mut::<S3Component>().unwrap();
-                                s3.set_client(client);
-                                widget.update().await.ok();
-                            }
-                        }
-                    }
-                    WidgetEventType::CloudWatch => {
-                        self.active_right_widget = WidgetType::CloudWatch;
-                        if let Some(widget) = self.right_widgets.get_mut(&WidgetType::CloudWatch) {
-                            if let Ok(client) = self.aws_clients.get_cloudwatch_client().await {
-                                let cloudwatch = widget.as_any_mut().downcast_mut::<CloudWatch>().unwrap();
-                                cloudwatch.set_client(client);
-                                widget.update().await.ok();
-                            }
-                        }
-                    }
-                    _ => {}
                 }
-            }
+                WidgetEventType::S3 => {
+                    self.active_right_widget = WidgetType::S3;
+                    if let Some(widget) = self.right_widgets.get_mut(&WidgetType::S3) {
+                        if let Ok(client) = self.aws_clients.get_s3_client().await {
+                            let s3 = widget.as_any_mut().downcast_mut::<S3Component>().unwrap();
+                            s3.set_client(client);
+                            widget.update().await.ok();
+                        }
+                    }
+                }
+                WidgetEventType::CloudWatch => {
+                    self.active_right_widget = WidgetType::CloudWatch;
+                    if let Some(widget) = self.right_widgets.get_mut(&WidgetType::CloudWatch) {
+                        if let Ok(client) = self.aws_clients.get_cloudwatch_client().await {
+                            let cloudwatch =
+                                widget.as_any_mut().downcast_mut::<CloudWatch>().unwrap();
+                            cloudwatch.set_client(client);
+                            widget.update().await.ok();
+                        }
+                    }
+                }
+                _ => {}
+            },
             TabActions::NextFocus => {
                 if self.current_focus == TabFocus::Left {
                     self.current_focus = TabFocus::Right;
@@ -267,24 +274,30 @@ impl Tab {
                                 WidgetType::S3 => {
                                     self.event_sender
                                         .send(Event::Tab(TabEvent::ComponentActions(
-                                            ComponentActions::S3ComponentActions(S3ComponentActions::NextFocus),
+                                            ComponentActions::S3ComponentActions(
+                                                S3ComponentActions::NextFocus,
+                                            ),
                                         )))
                                         .unwrap();
-                                },
+                                }
                                 WidgetType::DynamoDB => {
                                     self.event_sender
                                         .send(Event::Tab(TabEvent::ComponentActions(
-                                            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::NextFocus),
+                                            ComponentActions::DynamoDBComponentActions(
+                                                DynamoDBComponentActions::NextFocus,
+                                            ),
                                         )))
                                         .unwrap();
-                                },
+                                }
                                 WidgetType::CloudWatch => {
                                     self.event_sender
                                         .send(Event::Tab(TabEvent::ComponentActions(
-                                            ComponentActions::CloudWatchComponentActions(CloudWatchComponentActions::NextFocus),
+                                            ComponentActions::CloudWatchComponentActions(
+                                                CloudWatchComponentActions::NextFocus,
+                                            ),
                                         )))
                                         .unwrap();
-                                },
+                                }
                                 _ => {}
                             }
                         }
@@ -300,25 +313,31 @@ impl Tab {
                                 WidgetType::S3 => {
                                     self.event_sender
                                         .send(Event::Tab(TabEvent::ComponentActions(
-                                            ComponentActions::S3ComponentActions(S3ComponentActions::PreviousFocus),
+                                            ComponentActions::S3ComponentActions(
+                                                S3ComponentActions::PreviousFocus,
+                                            ),
                                         )))
                                         .unwrap();
-                                },
+                                }
                                 WidgetType::DynamoDB => {
                                     self.event_sender
                                         .send(Event::Tab(TabEvent::ComponentActions(
-                                            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::PreviousFocus),
+                                            ComponentActions::DynamoDBComponentActions(
+                                                DynamoDBComponentActions::PreviousFocus,
+                                            ),
                                         )))
                                         .unwrap();
-                                },
+                                }
 
                                 WidgetType::CloudWatch => {
                                     self.event_sender
                                         .send(Event::Tab(TabEvent::ComponentActions(
-                                            ComponentActions::CloudWatchComponentActions(CloudWatchComponentActions::PreviousFocus),
+                                            ComponentActions::CloudWatchComponentActions(
+                                                CloudWatchComponentActions::PreviousFocus,
+                                            ),
                                         )))
                                         .unwrap();
-                                },
+                                }
                                 _ => {}
                             }
                         } else {
@@ -402,7 +421,7 @@ impl Tab {
     fn render_widgets(&self, area: Rect, buf: &mut Buffer) {
         let popup_area = self.calculate_popup_area(area);
         let layout: Vec<Rect> = self.create_layout(area);
-    
+
         let left_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Plain)
@@ -413,7 +432,7 @@ impl Tab {
                     Color::DarkGray
                 }),
             );
-    
+
         let right_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Plain)
@@ -424,18 +443,18 @@ impl Tab {
                     Color::DarkGray
                 }),
             );
-    
+
         let left_inner = layout[0].inner(Margin::new(1, 1));
         let right_inner = layout[1].inner(Margin::new(1, 1));
-    
+
         left_block.render(layout[0], buf);
         right_block.render(layout[1], buf);
         self.left_widgets.render(left_inner, buf);
-    
+
         if let Some(widget) = self.right_widgets.get(&self.active_right_widget) {
             widget.render(right_inner, buf);
         }
-    
+
         if self.popup_mod {
             self.popup_widget.as_ref().map(|popup| {
                 popup.render(popup_area, buf);

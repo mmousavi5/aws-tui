@@ -114,7 +114,7 @@ impl AWSComponentBase {
         };
         self.current_focus
     }
-    
+
     pub fn set_focus_to_last(&mut self) -> ComponentFocus {
         self.current_focus = ComponentFocus::Results;
         self.current_focus

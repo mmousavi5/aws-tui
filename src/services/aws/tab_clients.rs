@@ -2,9 +2,9 @@ use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::Mutex;
 
+use super::cloudwatch_client::{CloudWatchClient, CloudWatchClientError};
 use super::dynamo_client::{DynamoDBClient, DynamoDBClientError};
 use super::s3_client::{S3Client, S3ClientError};
-use super::cloudwatch_client::{CloudWatchClient, CloudWatchClientError};
 
 #[derive(Error, Debug)]
 pub enum TabClientsError {
@@ -78,7 +78,7 @@ impl TabClients {
         }
         Ok(self.dynamodb_client.as_ref().unwrap().clone())
     }
-    
+
     pub async fn get_cloudwatch_client(
         &mut self,
     ) -> Result<Arc<Mutex<CloudWatchClient>>, TabClientsError> {
@@ -100,5 +100,4 @@ impl TabClients {
         let client = client.lock().await;
         Ok(client.list_tables().await?)
     }
-
 }

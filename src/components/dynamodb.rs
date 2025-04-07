@@ -1,7 +1,11 @@
-use crate::components::{AWSComponent, ComponentFocus};
 use crate::components::aws_base_component::AWSComponentBase;
-use crate::event_managment::event::{AWSServiceNavigatorEvent, ComponentActions, Event, InputBoxEvent, PopupEvent, TabEvent, WidgetActions, WidgetEventType, WidgetType, DynamoDBComponentActions};
+use crate::components::{AWSComponent, ComponentFocus};
+use crate::event_managment::event::{
+    AWSServiceNavigatorEvent, ComponentActions, DynamoDBComponentActions, Event, InputBoxEvent,
+    PopupEvent, TabEvent, WidgetActions, WidgetEventType, WidgetType,
+};
 use crate::services::aws::dynamo_client::DynamoDBClient;
+use crate::widgets::WidgetExt;
 use crate::widgets::aws_service_navigator::NavigatorContent;
 use crate::widgets::popup::PopupContent;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -9,7 +13,6 @@ use ratatui::{buffer::Buffer, layout::Rect};
 use std::any::Any;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use crate::widgets::WidgetExt;
 
 pub struct DynamoDB {
     base: AWSComponentBase,
@@ -19,10 +22,7 @@ pub struct DynamoDB {
 impl DynamoDB {
     pub fn new(event_sender: tokio::sync::mpsc::UnboundedSender<Event>) -> Self {
         Self {
-            base: AWSComponentBase::new(
-                event_sender.clone(), 
-                NavigatorContent::Records(vec![]),
-            ),
+            base: AWSComponentBase::new(event_sender.clone(), NavigatorContent::Records(vec![])),
             dynamodb_client: None,
         }
     }
@@ -46,10 +46,13 @@ impl AWSComponent for DynamoDB {
     fn handle_input(&mut self, key_event: KeyEvent) {
         if self.base.details_popup.is_visible() {
             if let Some(signal) = self.base.details_popup.handle_input(key_event) {
-                self.base.event_sender
-                    .send(Event::Tab(TabEvent::ComponentActions(ComponentActions::DynamoDBComponentActions(
-                        (DynamoDBComponentActions::WidgetActions(signal)),
-                    ))))
+                self.base
+                    .event_sender
+                    .send(Event::Tab(TabEvent::ComponentActions(
+                        ComponentActions::DynamoDBComponentActions(
+                            (DynamoDBComponentActions::WidgetActions(signal)),
+                        ),
+                    )))
                     .unwrap();
                 return;
             }
@@ -57,16 +60,22 @@ impl AWSComponent for DynamoDB {
 
         match key_event.code {
             KeyCode::Tab => {
-                self.base.event_sender
+                self.base
+                    .event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
-                        ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::NextFocus),
+                        ComponentActions::DynamoDBComponentActions(
+                            DynamoDBComponentActions::NextFocus,
+                        ),
                     )))
                     .unwrap();
             }
             KeyCode::BackTab => {
-                self.base.event_sender
+                self.base
+                    .event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
-                        ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::PreviousFocus),
+                        ComponentActions::DynamoDBComponentActions(
+                            DynamoDBComponentActions::PreviousFocus,
+                        ),
                     )))
                     .unwrap();
             }
@@ -95,9 +104,12 @@ impl AWSComponent for DynamoDB {
                     ComponentFocus::Results => self.base.results_navigator.handle_input(key_event),
                     ComponentFocus::None => None,
                 } {
-                    self.base.event_sender
+                    self.base
+                        .event_sender
                         .send(Event::Tab(TabEvent::ComponentActions(
-                            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::WidgetActions(signal)),
+                            ComponentActions::DynamoDBComponentActions(
+                                DynamoDBComponentActions::WidgetActions(signal),
+                            ),
                         )))
                         .unwrap();
                 }
@@ -107,14 +119,18 @@ impl AWSComponent for DynamoDB {
 
     async fn process_event(&mut self, event: ComponentActions) {
         match event {
-            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::SetTitle(title)) => {
+            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::SetTitle(
+                title,
+            )) => {
                 self.base.navigator.set_title(title.clone());
                 self.base.selected_item = Some(title);
             }
-            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::SetQuery(query)) => {
+            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::SetQuery(
+                query,
+            )) => {
                 self.base.results_navigator.set_title(query.clone());
                 self.base.selected_query = Some(query.clone());
-                
+
                 if let Some(client) = &self.dynamodb_client {
                     if let Some(selected_table) = &self.base.selected_item {
                         let content = client
@@ -123,13 +139,19 @@ impl AWSComponent for DynamoDB {
                             .query_table(selected_table.clone(), query.clone())
                             .await
                             .unwrap_or_else(|_| vec!["Query error".to_string()]);
-                            
-                        self.base.results_navigator.set_content(NavigatorContent::Records(content));
+
+                        self.base
+                            .results_navigator
+                            .set_content(NavigatorContent::Records(content));
                     }
                 }
             }
-            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::PopupDetails(title)) => {
-                self.base.details_popup.set_profile_list(PopupContent::Details(title.clone()));
+            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::PopupDetails(
+                title,
+            )) => {
+                self.base
+                    .details_popup
+                    .set_profile_list(PopupContent::Details(title.clone()));
                 self.base.details_popup.set_visible(true);
                 self.base.details_popup.set_active(true);
             }
@@ -137,10 +159,14 @@ impl AWSComponent for DynamoDB {
                 self.base.focus_next();
                 self.base.update_widget_states();
             }
-            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::WidgetActions(widget_action)) => match widget_action {
+            ComponentActions::DynamoDBComponentActions(
+                DynamoDBComponentActions::WidgetActions(widget_action),
+            ) => match widget_action {
                 WidgetActions::AWSServiceNavigatorEvent(ref _aws_navigator_event, widget_type) => {
                     if widget_type == WidgetType::AWSServiceNavigator {
-                        if let Some(signal) = self.base.navigator.process_event(widget_action.clone()) {
+                        if let Some(signal) =
+                            self.base.navigator.process_event(widget_action.clone())
+                        {
                             match signal {
                                 WidgetActions::AWSServiceNavigatorEvent(
                                     AWSServiceNavigatorEvent::SelectedItem(
@@ -148,9 +174,12 @@ impl AWSComponent for DynamoDB {
                                     ),
                                     WidgetType::AWSServiceNavigator,
                                 ) => {
-                                    self.base.event_sender
+                                    self.base
+                                        .event_sender
                                         .send(Event::Tab(TabEvent::ComponentActions(
-                                            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::SetTitle(title.clone())),
+                                            ComponentActions::DynamoDBComponentActions(
+                                                DynamoDBComponentActions::SetTitle(title.clone()),
+                                            ),
                                         )))
                                         .unwrap();
                                 }
@@ -158,7 +187,11 @@ impl AWSComponent for DynamoDB {
                             }
                         }
                     } else if widget_type == WidgetType::QueryResultsNavigator {
-                        if let Some(signal) = self.base.results_navigator.process_event(widget_action.clone()) {
+                        if let Some(signal) = self
+                            .base
+                            .results_navigator
+                            .process_event(widget_action.clone())
+                        {
                             match signal {
                                 WidgetActions::AWSServiceNavigatorEvent(
                                     AWSServiceNavigatorEvent::SelectedItem(
@@ -166,9 +199,14 @@ impl AWSComponent for DynamoDB {
                                     ),
                                     WidgetType::QueryResultsNavigator,
                                 ) => {
-                                    self.base.event_sender
+                                    self.base
+                                        .event_sender
                                         .send(Event::Tab(TabEvent::ComponentActions(
-                                            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::PopupDetails(title.clone())),
+                                            ComponentActions::DynamoDBComponentActions(
+                                                DynamoDBComponentActions::PopupDetails(
+                                                    title.clone(),
+                                                ),
+                                            ),
                                         )))
                                         .unwrap();
                                 }
@@ -181,9 +219,12 @@ impl AWSComponent for DynamoDB {
                     if let Some(signal) = self.base.input.process_event(widget_action) {
                         match signal {
                             WidgetActions::InputBoxEvent(InputBoxEvent::Written(content)) => {
-                                self.base.event_sender
+                                self.base
+                                    .event_sender
                                     .send(Event::Tab(TabEvent::ComponentActions(
-                                        ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::SetQuery(content)),
+                                        ComponentActions::DynamoDBComponentActions(
+                                            DynamoDBComponentActions::SetQuery(content),
+                                        ),
                                     )))
                                     .unwrap();
                             }
@@ -222,7 +263,9 @@ impl AWSComponent for DynamoDB {
         if let Some(client) = &self.dynamodb_client {
             let client = client.lock().await;
             let tables = client.list_tables().await?;
-            self.base.navigator.set_content(NavigatorContent::Records(tables));
+            self.base
+                .navigator
+                .set_content(NavigatorContent::Records(tables));
         }
         Ok(())
     }

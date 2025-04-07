@@ -40,7 +40,6 @@ pub enum ComponentActions {
     S3ComponentActions(S3ComponentActions),
     DynamoDBComponentActions(DynamoDBComponentActions),
     CloudWatchComponentActions(CloudWatchComponentActions),
-
 }
 #[derive(Clone)]
 pub enum CloudWatchComponentActions {

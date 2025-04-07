@@ -1,15 +1,21 @@
-use crate::components::{AWSComponent, ComponentFocus};
 use crate::components::aws_base_component::AWSComponentBase;
-use crate::event_managment::event::{AWSServiceNavigatorEvent, ComponentActions, Event, InputBoxEvent, PopupEvent, S3ComponentActions, TabEvent, WidgetActions, WidgetEventType, WidgetType};
+use crate::components::{AWSComponent, ComponentFocus};
+use crate::event_managment::event::{
+    AWSServiceNavigatorEvent, ComponentActions, Event, InputBoxEvent, PopupEvent,
+    S3ComponentActions, TabEvent, WidgetActions, WidgetEventType, WidgetType,
+};
 use crate::services::aws::s3_client::S3Client;
+use crate::widgets::WidgetExt;
 use crate::widgets::aws_service_navigator::NavigatorContent;
 use crate::widgets::popup::PopupContent;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use ratatui::{buffer::Buffer, layout::{Constraint, Direction, Layout, Rect}};
+use ratatui::{
+    buffer::Buffer,
+    layout::{Constraint, Direction, Layout, Rect},
+};
 use std::any::Any;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use crate::widgets::WidgetExt;
 
 pub struct S3Component {
     base: AWSComponentBase,
@@ -21,10 +27,7 @@ pub struct S3Component {
 impl S3Component {
     pub fn new(event_sender: tokio::sync::mpsc::UnboundedSender<Event>) -> Self {
         Self {
-            base: AWSComponentBase::new(
-                event_sender.clone(), 
-                NavigatorContent::Records(vec![]),
-            ),
+            base: AWSComponentBase::new(event_sender.clone(), NavigatorContent::Records(vec![])),
             s3_client: None,
             current_path: String::new(),
             selected_bucket: None,
@@ -34,12 +37,14 @@ impl S3Component {
     pub fn set_client(&mut self, s3_client: Arc<Mutex<S3Client>>) {
         self.s3_client = Some(s3_client);
     }
-    
+
     async fn handle_bucket_selection(&mut self, bucket_name: String) {
         self.selected_bucket = Some(bucket_name.clone());
         self.current_path = String::new();
-        self.base.navigator.set_title(format!("Bucket: {}", bucket_name));
-        
+        self.base
+            .navigator
+            .set_title(format!("Bucket: {}", bucket_name));
+
         if let Some(client) = &self.s3_client {
             let objects = client
                 .lock()
@@ -47,12 +52,16 @@ impl S3Component {
                 .list_objects(&bucket_name, "")
                 .await
                 .unwrap_or_else(|_| vec!["Error listing objects".to_string()]);
-                
-            self.base.results_navigator.set_title(String::from("Objects"));
-            self.base.results_navigator.set_content(NavigatorContent::Records(objects));
+
+            self.base
+                .results_navigator
+                .set_title(String::from("Objects"));
+            self.base
+                .results_navigator
+                .set_content(NavigatorContent::Records(objects));
         }
     }
-    
+
     async fn navigate_folder(&mut self, path: String) {
         if let Some(bucket) = &self.selected_bucket {
             let full_path = if self.current_path.is_empty() {
@@ -60,9 +69,9 @@ impl S3Component {
             } else {
                 format!("{}/{}", self.current_path, path)
             };
-            
+
             self.current_path = full_path.clone();
-            
+
             if let Some(client) = &self.s3_client {
                 let objects = client
                     .lock()
@@ -70,13 +79,17 @@ impl S3Component {
                     .list_objects(bucket, &full_path)
                     .await
                     .unwrap_or_else(|_| vec!["Error listing objects".to_string()]);
-                    
-                self.base.results_navigator.set_title(format!("Path: {}", full_path));
-                self.base.results_navigator.set_content(NavigatorContent::Records(objects));
+
+                self.base
+                    .results_navigator
+                    .set_title(format!("Path: {}", full_path));
+                self.base
+                    .results_navigator
+                    .set_content(NavigatorContent::Records(objects));
             }
         }
     }
-    
+
     fn navigate_up(&mut self) {
         if !self.current_path.is_empty() {
             if let Some(last_slash) = self.current_path.rfind('/') {
@@ -84,12 +97,16 @@ impl S3Component {
             } else {
                 self.current_path = String::new();
             }
-            
+
             // Send event to update objects list with new path
             if let Some(bucket) = &self.selected_bucket {
-                self.base.event_sender
+                self.base
+                    .event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
-                        ComponentActions::S3ComponentActions(S3ComponentActions::LoadPath(bucket.clone(), self.current_path.clone())),
+                        ComponentActions::S3ComponentActions(S3ComponentActions::LoadPath(
+                            bucket.clone(),
+                            self.current_path.clone(),
+                        )),
                     )))
                     .unwrap();
             }
@@ -124,7 +141,9 @@ impl AWSComponent for S3Component {
 
         // Render components
         self.base.navigator.render(horizontal_split[0], buf);
-        self.base.results_navigator.render(right_vertical_split[0], buf);
+        self.base
+            .results_navigator
+            .render(right_vertical_split[0], buf);
         self.base.input.render(right_vertical_split[1], buf);
 
         if self.base.details_popup.is_visible() {
@@ -135,9 +154,12 @@ impl AWSComponent for S3Component {
     fn handle_input(&mut self, key_event: KeyEvent) {
         if self.base.details_popup.is_visible() {
             if let Some(signal) = self.base.details_popup.handle_input(key_event) {
-                self.base.event_sender
+                self.base
+                    .event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
-                        ComponentActions::S3ComponentActions(S3ComponentActions::WidgetActions(signal))
+                        ComponentActions::S3ComponentActions(S3ComponentActions::WidgetActions(
+                            signal,
+                        )),
                     )))
                     .unwrap();
                 return;
@@ -146,14 +168,16 @@ impl AWSComponent for S3Component {
 
         match key_event.code {
             KeyCode::Tab => {
-                self.base.event_sender
+                self.base
+                    .event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
                         ComponentActions::S3ComponentActions(S3ComponentActions::NextFocus),
                     )))
                     .unwrap();
             }
             KeyCode::BackTab => {
-                self.base.event_sender
+                self.base
+                    .event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
                         ComponentActions::S3ComponentActions(S3ComponentActions::PreviousFocus),
                     )))
@@ -162,7 +186,8 @@ impl AWSComponent for S3Component {
             KeyCode::Backspace => {
                 // Navigate up one directory level
                 if self.base.current_focus == ComponentFocus::Results {
-                    self.base.event_sender
+                    self.base
+                        .event_sender
                         .send(Event::Tab(TabEvent::ComponentActions(
                             ComponentActions::S3ComponentActions(S3ComponentActions::NavigateUp),
                         )))
@@ -194,9 +219,12 @@ impl AWSComponent for S3Component {
                     ComponentFocus::Results => self.base.results_navigator.handle_input(key_event),
                     ComponentFocus::None => None,
                 } {
-                    self.base.event_sender
+                    self.base
+                        .event_sender
                         .send(Event::Tab(TabEvent::ComponentActions(
-                            ComponentActions::S3ComponentActions(S3ComponentActions::WidgetActions(signal)),
+                            ComponentActions::S3ComponentActions(
+                                S3ComponentActions::WidgetActions(signal),
+                            ),
                         )))
                         .unwrap();
                 }
@@ -224,11 +252,14 @@ impl AWSComponent for S3Component {
                             .list_objects(&bucket, &path)
                             .await
                             .unwrap_or_else(|_| vec!["Error listing objects".to_string()]);
-                            
-                        self.base.results_navigator.set_title(format!("Path: {}", 
+
+                        self.base.results_navigator.set_title(format!(
+                            "Path: {}",
                             if path.is_empty() { "/" } else { &path }
                         ));
-                        self.base.results_navigator.set_content(NavigatorContent::Records(objects));
+                        self.base
+                            .results_navigator
+                            .set_content(NavigatorContent::Records(objects));
                     }
                 }
                 S3ComponentActions::PopupDetails(key) => {
@@ -238,17 +269,26 @@ impl AWSComponent for S3Component {
                         } else {
                             format!("{}/{}", self.current_path, key)
                         };
-                        
-                        match client.lock().await.get_object_details(bucket, &full_key).await {
+
+                        match client
+                            .lock()
+                            .await
+                            .get_object_details(bucket, &full_key)
+                            .await
+                        {
                             Ok(details) => {
-                                self.base.details_popup.set_profile_list(PopupContent::Details(details));
+                                self.base
+                                    .details_popup
+                                    .set_profile_list(PopupContent::Details(details));
                                 self.base.details_popup.set_visible(true);
                                 self.base.details_popup.set_active(true);
-                            },
+                            }
                             Err(_) => {
-                                self.base.details_popup.set_profile_list(PopupContent::Details(
-                                    "Error fetching object details".to_string()
-                                ));
+                                self.base
+                                    .details_popup
+                                    .set_profile_list(PopupContent::Details(
+                                        "Error fetching object details".to_string(),
+                                    ));
                                 self.base.details_popup.set_visible(true);
                                 self.base.details_popup.set_active(true);
                             }
@@ -264,9 +304,14 @@ impl AWSComponent for S3Component {
                     self.base.update_widget_states();
                 }
                 S3ComponentActions::WidgetActions(widget_action) => match widget_action {
-                    WidgetActions::AWSServiceNavigatorEvent(ref _aws_navigator_event, widget_type) => {
+                    WidgetActions::AWSServiceNavigatorEvent(
+                        ref _aws_navigator_event,
+                        widget_type,
+                    ) => {
                         if widget_type == WidgetType::AWSServiceNavigator {
-                            if let Some(signal) = self.base.navigator.process_event(widget_action.clone()) {
+                            if let Some(signal) =
+                                self.base.navigator.process_event(widget_action.clone())
+                            {
                                 match signal {
                                     WidgetActions::AWSServiceNavigatorEvent(
                                         AWSServiceNavigatorEvent::SelectedItem(
@@ -274,9 +319,12 @@ impl AWSComponent for S3Component {
                                         ),
                                         WidgetType::AWSServiceNavigator,
                                     ) => {
-                                        self.base.event_sender
+                                        self.base
+                                            .event_sender
                                             .send(Event::Tab(TabEvent::ComponentActions(
-                                                ComponentActions::S3ComponentActions(S3ComponentActions::SelectBucket(bucket)),
+                                                ComponentActions::S3ComponentActions(
+                                                    S3ComponentActions::SelectBucket(bucket),
+                                                ),
                                             )))
                                             .unwrap();
                                     }
@@ -284,7 +332,11 @@ impl AWSComponent for S3Component {
                                 }
                             }
                         } else if widget_type == WidgetType::QueryResultsNavigator {
-                            if let Some(signal) = self.base.results_navigator.process_event(widget_action.clone()) {
+                            if let Some(signal) = self
+                                .base
+                                .results_navigator
+                                .process_event(widget_action.clone())
+                            {
                                 match signal {
                                     WidgetActions::AWSServiceNavigatorEvent(
                                         AWSServiceNavigatorEvent::SelectedItem(
@@ -294,16 +346,25 @@ impl AWSComponent for S3Component {
                                     ) => {
                                         // Check if it's a folder (ends with /) or a file
                                         if path.ends_with('/') {
-                                            let folder_name = path.trim_end_matches('/').to_string();
-                                            self.base.event_sender
+                                            let folder_name =
+                                                path.trim_end_matches('/').to_string();
+                                            self.base
+                                                .event_sender
                                                 .send(Event::Tab(TabEvent::ComponentActions(
-                                                    ComponentActions::S3ComponentActions(S3ComponentActions::NavigateFolder(folder_name)),
+                                                    ComponentActions::S3ComponentActions(
+                                                        S3ComponentActions::NavigateFolder(
+                                                            folder_name,
+                                                        ),
+                                                    ),
                                                 )))
                                                 .unwrap();
                                         } else {
-                                            self.base.event_sender
+                                            self.base
+                                                .event_sender
                                                 .send(Event::Tab(TabEvent::ComponentActions(
-                                                    ComponentActions::S3ComponentActions(S3ComponentActions::PopupDetails(path)),
+                                                    ComponentActions::S3ComponentActions(
+                                                        S3ComponentActions::PopupDetails(path),
+                                                    ),
                                                 )))
                                                 .unwrap();
                                         }
@@ -315,7 +376,9 @@ impl AWSComponent for S3Component {
                     }
                     WidgetActions::InputBoxEvent(ref _input_box_event) => {
                         if let Some(signal) = self.base.input.process_event(widget_action) {
-                            if let WidgetActions::InputBoxEvent(InputBoxEvent::Written(content)) = signal {
+                            if let WidgetActions::InputBoxEvent(InputBoxEvent::Written(content)) =
+                                signal
+                            {
                                 // The input box could be used for search functionality
                                 if let Some(bucket) = &self.selected_bucket {
                                     let search_path = if self.current_path.is_empty() {
@@ -323,13 +386,16 @@ impl AWSComponent for S3Component {
                                     } else {
                                         format!("{}/{}", self.current_path, content)
                                     };
-                                    
-                                    self.base.event_sender
+
+                                    self.base
+                                        .event_sender
                                         .send(Event::Tab(TabEvent::ComponentActions(
-                                            ComponentActions::S3ComponentActions(S3ComponentActions::LoadPath(
-                                                bucket.clone(), 
-                                                search_path
-                                            )),
+                                            ComponentActions::S3ComponentActions(
+                                                S3ComponentActions::LoadPath(
+                                                    bucket.clone(),
+                                                    search_path,
+                                                ),
+                                            ),
                                         )))
                                         .unwrap();
                                 }
@@ -369,11 +435,17 @@ impl AWSComponent for S3Component {
         if let Some(client) = &self.s3_client {
             let client = client.lock().await;
             let buckets = client.list_buckets().await?;
-            self.base.navigator.set_content(NavigatorContent::Records(buckets));
-            
+            self.base
+                .navigator
+                .set_content(NavigatorContent::Records(buckets));
+
             // Reset results area
-            self.base.results_navigator.set_content(NavigatorContent::Records(vec![]));
-            self.base.results_navigator.set_title(String::from("Select a bucket"));
+            self.base
+                .results_navigator
+                .set_content(NavigatorContent::Records(vec![]));
+            self.base
+                .results_navigator
+                .set_title(String::from("Select a bucket"));
         }
         Ok(())
     }
@@ -390,7 +462,7 @@ impl AWSComponent for S3Component {
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
-    
+
     fn set_focus_to_last(&mut self) {
         self.base.set_focus_to_last();
         self.base.update_widget_states();

@@ -4,6 +4,7 @@ use crate::{
     widgets::WidgetExt,
 };
 use crossterm::event::{KeyCode, KeyEvent};
+use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::{
     buffer::Buffer,
     layout::Alignment,
@@ -14,7 +15,6 @@ use ratatui::{
 };
 use serde_json;
 use std::any::Any;
-use ratatui::layout::{Layout, Direction, Constraint};
 
 const POPUP_MARGIN: u16 = 5;
 const MIN_POPUP_WIDTH: u16 = 20;
@@ -85,8 +85,8 @@ impl PopupWidget {
 
         // Define percentage constraints based on popup type
         let (width_percent, height_percent) = match self.profile_list {
-            PopupContent::Details(_) => (80, 80),  // Larger popup for details
-            _ => (60, 60),  // Smaller popup for profiles
+            PopupContent::Details(_) => (80, 80), // Larger popup for details
+            _ => (60, 60),                        // Smaller popup for profiles
         };
 
         // Create layout splits for both directions
@@ -111,7 +111,7 @@ impl PopupWidget {
         // Return the center rectangle
         Some(horizontal_split[1])
     }
-    
+
     fn calculate_content_area(&self, popup_area: Rect) -> Rect {
         Rect::new(
             popup_area.x.saturating_add(2),
@@ -140,7 +140,7 @@ impl PopupWidget {
                 if let Some(json_start) = content.find("] {") {
                     // Extract the potential JSON part (skipping timestamp)
                     let json_str = &content[(json_start + 1).min(content.len())..].trim();
-                    
+
                     // Parse the JSON string
                     match serde_json::from_str::<serde_json::Value>(json_str) {
                         Ok(json) => {
@@ -150,7 +150,8 @@ impl PopupWidget {
                         Err(_) => {
                             // Try the original content if JSON extraction failed
                             match serde_json::from_str::<serde_json::Value>(content) {
-                                Ok(json) => serde_json::to_string_pretty(&json).unwrap_or_else(|_| content.clone()),
+                                Ok(json) => serde_json::to_string_pretty(&json)
+                                    .unwrap_or_else(|_| content.clone()),
                                 Err(_) => content.clone(),
                             }
                         }
@@ -158,7 +159,9 @@ impl PopupWidget {
                 } else {
                     // If no timestamp pattern, try parsing the entire string as JSON
                     match serde_json::from_str::<serde_json::Value>(content) {
-                        Ok(json) => serde_json::to_string_pretty(&json).unwrap_or_else(|_| content.clone()),
+                        Ok(json) => {
+                            serde_json::to_string_pretty(&json).unwrap_or_else(|_| content.clone())
+                        }
                         Err(_) => content.clone(),
                     }
                 }
