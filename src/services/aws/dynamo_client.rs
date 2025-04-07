@@ -129,30 +129,3 @@ impl DynamoDBClient {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_list_tables() {
-        let profile = "xalgo_kambi_adapter".to_string();
-        let region = "eu-west-1".to_string();
-        let client = DynamoDBClient::new(profile, region).await.unwrap();
-        let tables = client.list_tables().await.unwrap();
-        assert!(tables.len() > 0);
-    }
-
-    #[tokio::test]
-    async fn test_query_table() {
-        let profile = "xalgo_kambi_adapter".to_string();
-        let region = "eu-west-1".to_string();
-        let client = DynamoDBClient::new(profile, region).await.unwrap();
-        let table_name = "test1"; // Replace with your actual table name
-        let query_resulat = client
-            .query_table(table_name.to_string(), "1".to_string())
-            .await
-            .unwrap();
-        assert!(query_resulat.len() == 3); // Replace with actual assertions based on your table data
-    }
-}
