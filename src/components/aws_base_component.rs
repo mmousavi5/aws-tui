@@ -3,7 +3,7 @@ use crate::event_managment::event::Event;
 use crate::widgets::WidgetExt;
 use crate::widgets::aws_service_navigator::{AWSServiceNavigator, NavigatorContent};
 use crate::widgets::input_box::InputBoxWidget;
-use crate::widgets::popup::PopupWidget;
+use crate::widgets::popup::{PopupWidget, PopupContent};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
@@ -39,6 +39,8 @@ impl AWSComponentBase {
         event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
         navigator_content: NavigatorContent,
     ) -> Self {
+        let popup_content = PopupContent::Profiles(vec!["No content".to_string()]);
+
         Self {
             navigator: AWSServiceNavigator::new(
                 crate::event_managment::event::WidgetType::AWSServiceNavigator,
@@ -51,7 +53,7 @@ impl AWSComponentBase {
                 false,
                 NavigatorContent::Records(vec![]),
             ),
-            details_popup: PopupWidget::new("Details", false, false),
+            details_popup: PopupWidget::new(popup_content, "Details", false, false),
             active: false,
             visible: true,
             event_sender,

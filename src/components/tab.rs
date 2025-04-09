@@ -5,6 +5,7 @@ use crate::services::aws::TabClients;
 use crate::{
     components::ComponentFocus,
     components::dynamodb::DynamoDB,
+    services::read_config,
     event_managment::event::{
         AWSServiceNavigatorEvent, CloudWatchComponentActions, ComponentActions,
         DynamoDBComponentActions, Event, PopupEvent, S3ComponentActions, TabActions, TabEvent,
@@ -13,7 +14,7 @@ use crate::{
     widgets::{
         WidgetExt,
         aws_service_navigator::{AWSServiceNavigator, NavigatorContent},
-        popup::PopupWidget,
+        popup::{PopupWidget, PopupContent},
     },
 };
 use crossterm::event::{KeyCode, KeyEvent};
@@ -82,6 +83,11 @@ impl Tab {
             Box::new(CloudWatch::new(event_sender.clone())),
         );
 
+        let profiles = match read_config::get_aws_profiles() {
+            Ok(profiles) => PopupContent::Profiles(profiles),
+            Err(_) => PopupContent::Profiles(vec!["No profiles found".to_string()]),
+        };
+
         Self {
             name: name.to_string(),
             popup_mod: true,
@@ -90,7 +96,8 @@ impl Tab {
                 false,
                 NavigatorContent::Services(WidgetEventType::VALUES.to_vec()),
             )),
-            popup_widget: Some(Box::new(PopupWidget::new(content, true, true))),
+            
+            popup_widget: Some(Box::new(PopupWidget::new(profiles,content, true, true))),
             right_widgets,
             active_right_widget: WidgetType::DynamoDB,
             event_sender,

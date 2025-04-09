@@ -89,7 +89,7 @@ impl CloudWatch {
     async fn view_log_details(&mut self, log_content: &str) {
         self.base
             .details_popup
-            .set_profile_list(PopupContent::Details(log_content.to_string()));
+            .set_content(PopupContent::Details(log_content.to_string()));
         self.base.details_popup.set_visible(true);
         self.base.details_popup.set_active(true);
     }
@@ -244,7 +244,7 @@ impl AWSComponent for CloudWatch {
                 CloudWatchComponentActions::PopupDetails(details) => {
                     self.base
                         .details_popup
-                        .set_profile_list(PopupContent::Details(details.clone()));
+                        .set_content(PopupContent::Details(details.clone()));
                     self.base.details_popup.set_visible(true);
                     self.base.details_popup.set_active(true);
                 }

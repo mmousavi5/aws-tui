@@ -170,7 +170,7 @@ impl AWSComponent for DynamoDB {
             )) => {
                 self.base
                     .details_popup
-                    .set_profile_list(PopupContent::Details(title.clone()));
+                    .set_content(PopupContent::Details(title.clone()));
                 self.base.details_popup.set_visible(true);
                 self.base.details_popup.set_active(true);
             }

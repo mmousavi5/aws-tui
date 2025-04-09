@@ -5,7 +5,6 @@
 
 use crate::{
     event_managment::event::{PopupEvent, WidgetActions},
-    services::read_config,
     widgets::WidgetExt,
 };
 use crossterm::event::{KeyCode, KeyEvent};
@@ -56,36 +55,32 @@ impl PopupContent {
 /// Widget for displaying popup dialogs with different content types
 #[derive(Debug)]
 pub struct PopupWidget {
-    title: String,                   // Title displayed in the popup border
-    profile_name: Option<String>,    // Currently selected profile (if applicable)
-    profile_list: PopupContent,      // Content displayed in the popup
-    selected_index: usize,           // Index of currently selected item (for lists)
-    active: bool,                    // Whether popup has input focus
-    visible: bool,                   // Whether popup is currently displayed
+    content: PopupContent,        // Content displayed in the popup
+    title: String,                // Title displayed in the popup border
+    selected_item: Option<String>, // Currently selected item (if applicable)
+    selection_index: usize,       // Index of currently selected item (for lists)
+    active: bool,                 // Whether popup has input focus
+    visible: bool,                // Whether popup is currently displayed
 }
 
 impl PopupWidget {
     /// Creates a new popup widget with optional initial visibility and active state
-    pub fn new(title: &str, visible: bool, active: bool) -> Self {
+    pub fn new(content:PopupContent, title: &str, visible: bool, active: bool) -> Self {
         // Load AWS profiles by default
-        let profiles = match read_config::get_aws_profiles() {
-            Ok(profiles) => PopupContent::Profiles(profiles),
-            Err(_) => PopupContent::Profiles(vec!["No profiles found".to_string()]),
-        };
 
         Self {
             title: title.to_string(),
-            profile_name: None,
-            profile_list: profiles,
-            selected_index: 0,
+            selected_item: None,
+            content: content,
+            selection_index: 0,
             active,
             visible,
         }
     }
     
     /// Updates the content of the popup
-    pub fn set_profile_list(&mut self, profiles: PopupContent) {
-        self.profile_list = profiles;
+    pub fn set_content(&mut self, content: PopupContent) {
+        self.content = content;
     }
     
     /// Calculates the area for the popup based on parent area and content type
@@ -95,7 +90,7 @@ impl PopupWidget {
         }
 
         // Define percentage constraints based on popup type
-        let (width_percent, height_percent) = match self.profile_list {
+        let (width_percent, height_percent) = match self.content {
             PopupContent::Details(_) => (80, 80), // Larger popup for details
             _ => (60, 60),                        // Smaller popup for profiles
         };
@@ -133,17 +128,17 @@ impl PopupWidget {
         )
     }
 
-    /// Renders profiles as a list or formats details content with JSON pretty printing
-    fn render_profiles(&self) -> String {
-        match &self.profile_list {
-            PopupContent::Profiles(profiles) => profiles
+    /// Renders content as a list or formats details content with JSON pretty printing
+    fn render_content(&self) -> String {
+        match &self.content {
+            PopupContent::Profiles(items) => items
                 .iter()
                 .enumerate()
-                .map(|(i, profile)| {
-                    if i == self.selected_index {
-                        format!("> {}", profile) // Selected item has an indicator
+                .map(|(i, item)| {
+                    if i == self.selection_index {
+                        format!("> {}", item) // Selected item has an indicator
                     } else {
-                        format!("  {}", profile)
+                        format!("  {}", item)
                     }
                 })
                 .collect::<Vec<_>>()
@@ -214,8 +209,8 @@ impl WidgetExt for PopupWidget {
             .render(popup_area, buf);
 
         // Render profiles list or details content
-        let profiles_text = self.render_profiles();
-        Paragraph::new(profiles_text)
+        let content_text = self.render_content();
+        Paragraph::new(content_text)
             .block(Block::default())
             .style(Style::default().fg(Color::White).bg(Color::Black))
             .alignment(Alignment::Left)
@@ -263,22 +258,22 @@ impl WidgetExt for PopupWidget {
         match event {
             WidgetActions::PopupEvent(event) => match event {
                 PopupEvent::ArrowUp => {
-                    if self.selected_index > 0 {
-                        self.selected_index -= 1;
+                    if self.selection_index > 0 {
+                        self.selection_index -= 1;
                     }
                     None
                 }
                 PopupEvent::ArrowDown => {
-                    if self.selected_index < self.profile_list.len() - 1 {
-                        self.selected_index += 1;
+                    if self.selection_index < self.content.len() - 1 {
+                        self.selection_index += 1;
                     }
                     None
                 }
                 PopupEvent::Enter => {
-                    if let Some(profile) = self.profile_list.get(self.selected_index) {
-                        self.profile_name = Some(profile.clone());
+                    if let Some(item) = self.content.get(self.selection_index) {
+                        self.selected_item = Some(item.clone());
                         return Some(WidgetActions::PopupEvent(PopupEvent::SelectedItem(
-                            self.profile_name.clone().unwrap(),
+                            self.selected_item.clone().unwrap(),
                         )));
                     }
                     None
@@ -297,7 +292,7 @@ impl WidgetExt for PopupWidget {
     fn get_help_items(&self) -> Vec<(String, String)> {
         let mut items = vec![];
 
-        match self.profile_list {
+        match self.content {
             PopupContent::Profiles(_) => {
                 items.push(("Enter".to_string(), "Select profile".to_string()));
             }

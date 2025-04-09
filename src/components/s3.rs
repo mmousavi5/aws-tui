@@ -302,14 +302,14 @@ impl AWSComponent for S3Component {
                             Ok(details) => {
                                 self.base
                                     .details_popup
-                                    .set_profile_list(PopupContent::Details(details));
+                                    .set_content(PopupContent::Details(details));
                                 self.base.details_popup.set_visible(true);
                                 self.base.details_popup.set_active(true);
                             }
                             Err(_) => {
                                 self.base
                                     .details_popup
-                                    .set_profile_list(PopupContent::Details(
+                                    .set_content(PopupContent::Details(
                                         "Error fetching object details".to_string(),
                                     ));
                                 self.base.details_popup.set_visible(true);
