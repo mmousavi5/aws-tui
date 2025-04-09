@@ -82,13 +82,6 @@ impl CloudWatch {
             // Clone the client to avoid borrowing issues
             let client_clone = Arc::clone(client_ref);
 
-            let logs = client_clone
-                .lock()
-                .await
-                .list_log_events(log_group, filter_pattern, Some(time_range))
-                .await
-                .unwrap_or_else(|_| vec!["No matching logs found".to_string()]);
-
             let title = if filter_pattern.is_empty() {
                 title_prefix.to_string()
             } else {
@@ -96,9 +89,25 @@ impl CloudWatch {
             };
 
             self.base.results_navigator.set_title(title);
-            self.base
-                .results_navigator
-                .set_content(NavigatorContent::Records(logs));
+
+            let logs = client_clone
+                .lock()
+                .await
+                .list_log_events(log_group, filter_pattern, Some(time_range))
+                .await;
+            match logs {
+                Ok(logs) => {
+                    self.base
+                        .results_navigator
+                        .set_content(NavigatorContent::Records(logs));
+                }
+                Err(err) => {
+                    // Handle error (e.g., show error message in the results navigator)
+                    self.base
+                        .results_navigator
+                        .set_content(NavigatorContent::Records(vec![err.to_string()]));
+                }
+            }
         }
     }
 
