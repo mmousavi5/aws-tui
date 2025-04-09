@@ -1,8 +1,8 @@
 use crate::components::aws_base_component::AWSComponentBase;
 use crate::components::{AWSComponent, ComponentFocus};
 use crate::event_managment::event::{
-    AWSServiceNavigatorEvent, CloudWatchComponentActions, ComponentActions, Event, InputBoxEvent,
-    TabEvent, WidgetActions, WidgetEventType, WidgetType,
+    ServiceNavigatorEvent, CloudWatchComponentActions, ComponentActions, Event, InputBoxEvent,
+    TabEvent, WidgetAction, WidgetEventType, WidgetType,
 };
 use crate::services::aws::cloudwatch_client::CloudWatchClient;
 use crate::widgets::WidgetExt;
@@ -142,7 +142,7 @@ impl AWSComponent for CloudWatch {
                     .event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
                         ComponentActions::CloudWatchComponentActions(
-                            CloudWatchComponentActions::WidgetActions(signal),
+                            CloudWatchComponentActions::WidgetAction(signal),
                         ),
                     )))
                     .unwrap();
@@ -202,7 +202,7 @@ impl AWSComponent for CloudWatch {
                         .event_sender
                         .send(Event::Tab(TabEvent::ComponentActions(
                             ComponentActions::CloudWatchComponentActions(
-                                CloudWatchComponentActions::WidgetActions(signal),
+                                CloudWatchComponentActions::WidgetAction(signal),
                             ),
                         )))
                         .unwrap();
@@ -249,8 +249,8 @@ impl AWSComponent for CloudWatch {
                     self.base.details_popup.set_active(true);
                 }
                 // Process events from child widgets
-                CloudWatchComponentActions::WidgetActions(widget_action) => match widget_action {
-                    WidgetActions::AWSServiceNavigatorEvent(
+                CloudWatchComponentActions::WidgetAction(widget_action) => match widget_action {
+                    WidgetAction::ServiceNavigatorEvent(
                         ref _aws_navigator_event,
                         widget_type,
                     ) => {
@@ -260,8 +260,8 @@ impl AWSComponent for CloudWatch {
                             {
                                 match signal {
                                     // User selected a log group from the navigator
-                                    WidgetActions::AWSServiceNavigatorEvent(
-                                        AWSServiceNavigatorEvent::SelectedItem(
+                                    WidgetAction::ServiceNavigatorEvent(
+                                        ServiceNavigatorEvent::ItemSelected(
                                             WidgetEventType::RecordSelected(log_group),
                                         ),
                                         WidgetType::AWSServiceNavigator,
@@ -288,8 +288,8 @@ impl AWSComponent for CloudWatch {
                             {
                                 match signal {
                                     // User selected a log entry to view details
-                                    WidgetActions::AWSServiceNavigatorEvent(
-                                        AWSServiceNavigatorEvent::SelectedItem(
+                                    WidgetAction::ServiceNavigatorEvent(
+                                        ServiceNavigatorEvent::ItemSelected(
                                             WidgetEventType::RecordSelected(log_content),
                                         ),
                                         WidgetType::QueryResultsNavigator,
@@ -311,9 +311,9 @@ impl AWSComponent for CloudWatch {
                             }
                         }
                     }
-                    WidgetActions::InputBoxEvent(ref _input_box_event) => {
+                    WidgetAction::InputBoxEvent(ref _input_box_event) => {
                         if let Some(signal) = self.base.input.process_event(widget_action) {
-                            if let WidgetActions::InputBoxEvent(InputBoxEvent::Written(content)) =
+                            if let WidgetAction::InputBoxEvent(InputBoxEvent::Written(content)) =
                                 signal
                             {
                                 // Use input content to filter logs
@@ -331,7 +331,7 @@ impl AWSComponent for CloudWatch {
                         }
                     }
                     // Close popup when exit event received
-                    WidgetActions::PopupEvent(_) => {
+                    WidgetAction::PopupAction(_) => {
                         self.base.details_popup.set_visible(false);
                         self.base.details_popup.set_active(false);
                     }

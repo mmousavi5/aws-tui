@@ -1,8 +1,8 @@
 use crate::components::aws_base_component::AWSComponentBase;
 use crate::components::{AWSComponent, ComponentFocus};
 use crate::event_managment::event::{
-    AWSServiceNavigatorEvent, ComponentActions, DynamoDBComponentActions, Event, InputBoxEvent,
-    TabEvent, WidgetActions, WidgetEventType, WidgetType,
+    ServiceNavigatorEvent, ComponentActions, DynamoDBComponentActions, Event, InputBoxEvent,
+    TabEvent, WidgetAction, WidgetEventType, WidgetType,
 };
 use crate::services::aws::dynamo_client::DynamoDBClient;
 use crate::widgets::WidgetExt;
@@ -184,15 +184,15 @@ impl AWSComponent for DynamoDB {
                 DynamoDBComponentActions::WidgetActions(widget_action),
             ) => match widget_action {
                 // Process navigator events
-                WidgetActions::AWSServiceNavigatorEvent(ref _aws_navigator_event, widget_type) => {
+                WidgetAction::ServiceNavigatorEvent(ref _aws_navigator_event, widget_type) => {
                     if widget_type == WidgetType::AWSServiceNavigator {
                         if let Some(signal) =
                             self.base.navigator.process_event(widget_action.clone())
                         {
                             match signal {
                                 // Handle selection of a table from the navigator
-                                WidgetActions::AWSServiceNavigatorEvent(
-                                    AWSServiceNavigatorEvent::SelectedItem(
+                                WidgetAction::ServiceNavigatorEvent(
+                                    ServiceNavigatorEvent::ItemSelected(
                                         WidgetEventType::RecordSelected(title),
                                     ),
                                     WidgetType::AWSServiceNavigator,
@@ -218,8 +218,8 @@ impl AWSComponent for DynamoDB {
                         {
                             match signal {
                                 // Handle selection of a result item to show details
-                                WidgetActions::AWSServiceNavigatorEvent(
-                                    AWSServiceNavigatorEvent::SelectedItem(
+                                WidgetAction::ServiceNavigatorEvent(
+                                    ServiceNavigatorEvent::ItemSelected(
                                         WidgetEventType::RecordSelected(title),
                                     ),
                                     WidgetType::QueryResultsNavigator,
@@ -241,11 +241,11 @@ impl AWSComponent for DynamoDB {
                     }
                 }
                 // Process input box events
-                WidgetActions::InputBoxEvent(ref _input_box_event) => {
+                WidgetAction::InputBoxEvent(ref _input_box_event) => {
                     if let Some(signal) = self.base.input.process_event(widget_action) {
                         match signal {
                             // Handle when user submits a query in the input box
-                            WidgetActions::InputBoxEvent(InputBoxEvent::Written(content)) => {
+                            WidgetAction::InputBoxEvent(InputBoxEvent::Written(content)) => {
                                 self.base
                                     .event_sender
                                     .send(Event::Tab(TabEvent::ComponentActions(
@@ -260,7 +260,7 @@ impl AWSComponent for DynamoDB {
                     }
                 }
                 // Handle popup close events
-                WidgetActions::PopupEvent(_) => {
+                WidgetAction::PopupAction(_) => {
                     self.base.details_popup.set_visible(false);
                     self.base.details_popup.set_active(false);
                 }

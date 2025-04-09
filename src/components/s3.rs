@@ -1,8 +1,8 @@
 use crate::components::aws_base_component::AWSComponentBase;
 use crate::components::{AWSComponent, ComponentFocus};
 use crate::event_managment::event::{
-    AWSServiceNavigatorEvent, ComponentActions, Event, InputBoxEvent, S3ComponentActions, TabEvent,
-    WidgetActions, WidgetEventType, WidgetType,
+    ServiceNavigatorEvent, ComponentActions, Event, InputBoxEvent, S3ComponentActions, TabEvent,
+    WidgetAction, WidgetEventType, WidgetType,
 };
 use crate::services::aws::s3_client::S3Client;
 use crate::widgets::WidgetExt;
@@ -171,7 +171,7 @@ impl AWSComponent for S3Component {
                 self.base
                     .event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
-                        ComponentActions::S3ComponentActions(S3ComponentActions::WidgetActions(
+                        ComponentActions::S3ComponentActions(S3ComponentActions::WidgetAction(
                             signal,
                         )),
                     )))
@@ -239,7 +239,7 @@ impl AWSComponent for S3Component {
                         .event_sender
                         .send(Event::Tab(TabEvent::ComponentActions(
                             ComponentActions::S3ComponentActions(
-                                S3ComponentActions::WidgetActions(signal),
+                                S3ComponentActions::WidgetAction(signal),
                             ),
                         )))
                         .unwrap();
@@ -329,8 +329,8 @@ impl AWSComponent for S3Component {
                     self.base.update_widget_states();
                 }
                 // Process events from child widgets
-                S3ComponentActions::WidgetActions(widget_action) => match widget_action {
-                    WidgetActions::AWSServiceNavigatorEvent(
+                S3ComponentActions::WidgetAction(widget_action) => match widget_action {
+                    WidgetAction::ServiceNavigatorEvent(
                         ref _aws_navigator_event,
                         widget_type,
                     ) => {
@@ -340,8 +340,8 @@ impl AWSComponent for S3Component {
                             {
                                 match signal {
                                     // User selected a bucket from the navigator
-                                    WidgetActions::AWSServiceNavigatorEvent(
-                                        AWSServiceNavigatorEvent::SelectedItem(
+                                    WidgetAction::ServiceNavigatorEvent(
+                                        ServiceNavigatorEvent::ItemSelected(
                                             WidgetEventType::RecordSelected(bucket),
                                         ),
                                         WidgetType::AWSServiceNavigator,
@@ -366,8 +366,8 @@ impl AWSComponent for S3Component {
                             {
                                 match signal {
                                     // User selected an object or folder from the results
-                                    WidgetActions::AWSServiceNavigatorEvent(
-                                        AWSServiceNavigatorEvent::SelectedItem(
+                                    WidgetAction::ServiceNavigatorEvent(
+                                        ServiceNavigatorEvent::ItemSelected(
                                             WidgetEventType::RecordSelected(path),
                                         ),
                                         WidgetType::QueryResultsNavigator,
@@ -403,9 +403,9 @@ impl AWSComponent for S3Component {
                             }
                         }
                     }
-                    WidgetActions::InputBoxEvent(ref _input_box_event) => {
+                    WidgetAction::InputBoxEvent(ref _input_box_event) => {
                         if let Some(signal) = self.base.input.process_event(widget_action) {
-                            if let WidgetActions::InputBoxEvent(InputBoxEvent::Written(content)) =
+                            if let WidgetAction::InputBoxEvent(InputBoxEvent::Written(content)) =
                                 signal
                             {
                                 // Handle search input when a bucket is selected
@@ -432,7 +432,7 @@ impl AWSComponent for S3Component {
                         }
                     }
                     // Close popup when exit event received
-                    WidgetActions::PopupEvent(_) => {
+                    WidgetAction::PopupAction(_) => {
                         self.base.details_popup.set_visible(false);
                         self.base.details_popup.set_active(false);
                     }

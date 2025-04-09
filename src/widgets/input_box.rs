@@ -3,7 +3,7 @@
 //! Provides a text input box with clipboard support and cursor positioning.
 //! Used for search queries, filters, and other text input needs.
 
-use crate::event_managment::event::{InputBoxEvent, WidgetActions};
+use crate::event_managment::event::{InputBoxEvent, WidgetAction};
 use crate::widgets::WidgetExt;
 use clipboard::{ClipboardContext, ClipboardProvider};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -96,7 +96,7 @@ impl WidgetExt for InputBoxWidget {
     }
 
     /// Handles keyboard input and triggers appropriate actions
-    fn handle_input(&mut self, key_event: KeyEvent) -> Option<WidgetActions> {
+    fn handle_input(&mut self, key_event: KeyEvent) -> Option<WidgetAction> {
         // if !self.active {
         //     return;
         // }
@@ -104,28 +104,28 @@ impl WidgetExt for InputBoxWidget {
             // Clipboard operations with Ctrl modifiers
             KeyCode::Char('v') if key_event.modifiers == KeyModifiers::CONTROL => {
                 self.paste_from_clipboard();
-                Some(WidgetActions::InputBoxEvent(InputBoxEvent::Written(
+                Some(WidgetAction::InputBoxEvent(InputBoxEvent::Written(
                     self.content.clone(),
                 )))
             }
             KeyCode::Char('c') if key_event.modifiers == KeyModifiers::CONTROL => {
                 self.copy_to_clipboard();
-                Some(WidgetActions::InputBoxEvent(InputBoxEvent::Written(
+                Some(WidgetAction::InputBoxEvent(InputBoxEvent::Written(
                     self.content.clone(),
                 )))
             }
             // Pass through regular character input
-            KeyCode::Char(ref _c) => Some(WidgetActions::InputBoxEvent(InputBoxEvent::KeyPress(
+            KeyCode::Char(ref _c) => Some(WidgetAction::InputBoxEvent(InputBoxEvent::KeyPress(
                 key_event,
             ))),
             // Text editing commands
-            KeyCode::Backspace => Some(WidgetActions::InputBoxEvent(InputBoxEvent::Backspace)),
-            KeyCode::Delete => Some(WidgetActions::InputBoxEvent(InputBoxEvent::Delete)),
+            KeyCode::Backspace => Some(WidgetAction::InputBoxEvent(InputBoxEvent::Backspace)),
+            KeyCode::Delete => Some(WidgetAction::InputBoxEvent(InputBoxEvent::Delete)),
             // Cursor movement
-            KeyCode::Left => Some(WidgetActions::InputBoxEvent(InputBoxEvent::Left)),
-            KeyCode::Right => Some(WidgetActions::InputBoxEvent(InputBoxEvent::Right)),
+            KeyCode::Left => Some(WidgetAction::InputBoxEvent(InputBoxEvent::Left)),
+            KeyCode::Right => Some(WidgetAction::InputBoxEvent(InputBoxEvent::Right)),
             // Submit content
-            KeyCode::Enter => Some(WidgetActions::InputBoxEvent(InputBoxEvent::Enter)),
+            KeyCode::Enter => Some(WidgetAction::InputBoxEvent(InputBoxEvent::Enter)),
 
             _ => None,
         }
@@ -157,9 +157,9 @@ impl WidgetExt for InputBoxWidget {
     }
 
     /// Processes input events and modifies content accordingly
-    fn process_event(&mut self, event: WidgetActions) -> Option<WidgetActions> {
+    fn process_event(&mut self, event: WidgetAction) -> Option<WidgetAction> {
         match event {
-            WidgetActions::InputBoxEvent(input_event) => match input_event {
+            WidgetAction::InputBoxEvent(input_event) => match input_event {
                 // Add character at cursor position
                 InputBoxEvent::KeyPress(key_event) => {
                     if let KeyCode::Char(c) = key_event.code {
@@ -201,7 +201,7 @@ impl WidgetExt for InputBoxWidget {
                 InputBoxEvent::Enter => {
                     // Handle enter key event
                     // For example, you can send the content to an event sender or process it
-                    Some(WidgetActions::InputBoxEvent(InputBoxEvent::Written(
+                    Some(WidgetAction::InputBoxEvent(InputBoxEvent::Written(
                         self.content.clone(),
                     )))
                 }

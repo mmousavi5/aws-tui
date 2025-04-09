@@ -4,7 +4,7 @@
 //! Handles user interactions, rendering, and event processing for popup dialogs.
 
 use crate::{
-    event_managment::event::{PopupEvent, WidgetActions},
+    event_managment::event::{PopupAction, WidgetAction},
     widgets::WidgetExt,
 };
 use crossterm::event::{KeyCode, KeyEvent};
@@ -218,12 +218,12 @@ impl WidgetExt for PopupWidget {
     }
 
     /// Handles keyboard input for popup navigation
-    fn handle_input(&mut self, key_event: KeyEvent) -> Option<WidgetActions> {
+    fn handle_input(&mut self, key_event: KeyEvent) -> Option<WidgetAction> {
         match key_event.code {
-            KeyCode::Up => Some(WidgetActions::PopupEvent(PopupEvent::ArrowUp)),
-            KeyCode::Down => Some(WidgetActions::PopupEvent(PopupEvent::ArrowDown)),
-            KeyCode::Enter => Some(WidgetActions::PopupEvent(PopupEvent::Enter)),
-            KeyCode::Esc => Some(WidgetActions::PopupEvent(PopupEvent::Escape)),
+            KeyCode::Up => Some(WidgetAction::PopupAction(PopupAction::ArrowUp)),
+            KeyCode::Down => Some(WidgetAction::PopupAction(PopupAction::ArrowDown)),
+            KeyCode::Enter => Some(WidgetAction::PopupAction(PopupAction::Enter)),
+            KeyCode::Esc => Some(WidgetAction::PopupAction(PopupAction::Escape)),
             _ => None,
         }
     }
@@ -254,31 +254,31 @@ impl WidgetExt for PopupWidget {
     }
     
     /// Processes popup events and updates state accordingly
-    fn process_event(&mut self, event: WidgetActions) -> Option<WidgetActions> {
+    fn process_event(&mut self, event: WidgetAction) -> Option<WidgetAction> {
         match event {
-            WidgetActions::PopupEvent(event) => match event {
-                PopupEvent::ArrowUp => {
+            WidgetAction::PopupAction(event) => match event {
+                PopupAction::ArrowUp => {
                     if self.selection_index > 0 {
                         self.selection_index -= 1;
                     }
                     None
                 }
-                PopupEvent::ArrowDown => {
+                PopupAction::ArrowDown => {
                     if self.selection_index < self.content.len() - 1 {
                         self.selection_index += 1;
                     }
                     None
                 }
-                PopupEvent::Enter => {
+                PopupAction::Enter => {
                     if let Some(item) = self.content.get(self.selection_index) {
                         self.selected_item = Some(item.clone());
-                        return Some(WidgetActions::PopupEvent(PopupEvent::SelectedItem(
+                        return Some(WidgetAction::PopupAction(PopupAction::ItemSelected(
                             self.selected_item.clone().unwrap(),
                         )));
                     }
                     None
                 }
-                PopupEvent::Escape => {
+                PopupAction::Escape => {
                     self.set_visible(false);
                     None
                 }

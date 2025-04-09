@@ -1,6 +1,6 @@
-use crate::event_managment::event::{WidgetActions, WidgetEventType, WidgetType};
+use crate::event_managment::event::{WidgetAction, WidgetEventType, WidgetType};
 use crate::{
-    event_managment::event::{AWSServiceNavigatorEvent, InputBoxEvent},
+    event_managment::event::{ServiceNavigatorEvent, InputBoxEvent},
     widgets::WidgetExt,
 };
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -61,13 +61,13 @@ impl AWSServiceNavigator {
     }
 
     /// Returns a widget action for the currently selected item
-    fn selected_item(&self) -> Option<WidgetActions> {
+    fn selected_item(&self) -> Option<WidgetAction> {
         match &self.filtered_content {
             NavigatorContent::Services(services) => {
                 if self.selected_index < services.len() {
                     services.get(self.selected_index).map(|service| {
-                        WidgetActions::AWSServiceNavigatorEvent(
-                            AWSServiceNavigatorEvent::SelectedItem(service.clone()),
+                        WidgetAction::ServiceNavigatorEvent(
+                            ServiceNavigatorEvent::ItemSelected(service.clone()),
                             self.widget_type,
                         )
                     })
@@ -78,8 +78,8 @@ impl AWSServiceNavigator {
             NavigatorContent::Records(records) => {
                 if self.selected_index < records.len() {
                     records.get(self.selected_index).map(|record| {
-                        WidgetActions::AWSServiceNavigatorEvent(
-                            AWSServiceNavigatorEvent::SelectedItem(
+                        WidgetAction::ServiceNavigatorEvent(
+                            ServiceNavigatorEvent::ItemSelected(
                                 WidgetEventType::RecordSelected(record.clone()),
                             ),
                             self.widget_type,
@@ -346,7 +346,7 @@ impl WidgetExt for AWSServiceNavigator {
     }
 
     /// Handles keyboard input and returns appropriate widget actions
-    fn handle_input(&mut self, key_event: KeyEvent) -> Option<WidgetActions> {
+    fn handle_input(&mut self, key_event: KeyEvent) -> Option<WidgetAction> {
         // If we're in filter mode, handle text input
         if self.filter_mode {
             match key_event.code {
@@ -355,33 +355,33 @@ impl WidgetExt for AWSServiceNavigator {
                     if !key_event.modifiers.contains(KeyModifiers::CONTROL) {
                         self.add_to_filter(c);
                     }
-                    Some(WidgetActions::InputBoxEvent(InputBoxEvent::Written(
+                    Some(WidgetAction::InputBoxEvent(InputBoxEvent::Written(
                         self.filter_text.clone(),
                     )))
                 }
                 KeyCode::Backspace => {
                     // Remove last character from filter
                     self.remove_from_filter();
-                    Some(WidgetActions::InputBoxEvent(InputBoxEvent::Backspace))
+                    Some(WidgetAction::InputBoxEvent(InputBoxEvent::Backspace))
                 }
                 KeyCode::Delete => {
                     // Also remove character
                     self.remove_from_filter();
-                    Some(WidgetActions::InputBoxEvent(InputBoxEvent::Delete))
+                    Some(WidgetAction::InputBoxEvent(InputBoxEvent::Delete))
                 }
                 KeyCode::Esc => {
                     // Exit filter mode but keep the current filter
                     self.filter_mode = false;
-                    Some(WidgetActions::AWSServiceNavigatorEvent(
-                        AWSServiceNavigatorEvent::Escape,
+                    Some(WidgetAction::ServiceNavigatorEvent(
+                        ServiceNavigatorEvent::Escape,
                         self.widget_type.clone(),
                     ))
                 }
                 KeyCode::Enter => {
                     // Exit filter mode and keep the filter
                     self.filter_mode = false;
-                    Some(WidgetActions::AWSServiceNavigatorEvent(
-                        AWSServiceNavigatorEvent::Enter,
+                    Some(WidgetAction::ServiceNavigatorEvent(
+                        ServiceNavigatorEvent::Enter,
                         self.widget_type.clone(),
                     ))
                 }
@@ -393,24 +393,24 @@ impl WidgetExt for AWSServiceNavigator {
                 KeyCode::Char('f') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
                     // Enter filter mode with Ctrl+F
                     self.filter_mode = true;
-                    Some(WidgetActions::AWSServiceNavigatorEvent(
-                        AWSServiceNavigatorEvent::Enter,
+                    Some(WidgetAction::ServiceNavigatorEvent(
+                        ServiceNavigatorEvent::Enter,
                         self.widget_type.clone(),
                     ))
                 }
                 KeyCode::Char('/') => {
                     // Alternative way to enter filter mode
                     self.filter_mode = true;
-                    Some(WidgetActions::AWSServiceNavigatorEvent(
-                        AWSServiceNavigatorEvent::Enter,
+                    Some(WidgetAction::ServiceNavigatorEvent(
+                        ServiceNavigatorEvent::Enter,
                         self.widget_type.clone(),
                     ))
                 }
                 KeyCode::Esc => {
                     // Clear filter with escape when not in filter mode
                     if !self.filter_text.is_empty() {
-                        Some(WidgetActions::AWSServiceNavigatorEvent(
-                            AWSServiceNavigatorEvent::Escape,
+                        Some(WidgetAction::ServiceNavigatorEvent(
+                            ServiceNavigatorEvent::Escape,
                             self.widget_type.clone(),
                         ))
                     } else {
@@ -422,8 +422,8 @@ impl WidgetExt for AWSServiceNavigator {
                         self.selected_index -= 1;
                         self.update_scroll_offset(10); // Will be refined in render
                     }
-                    Some(WidgetActions::AWSServiceNavigatorEvent(
-                        AWSServiceNavigatorEvent::ArrowUp,
+                    Some(WidgetAction::ServiceNavigatorEvent(
+                        ServiceNavigatorEvent::ArrowUp,
                         self.widget_type.clone(),
                     ))
                 }
@@ -433,8 +433,8 @@ impl WidgetExt for AWSServiceNavigator {
                         self.selected_index += 1;
                         self.update_scroll_offset(10); // Will be refined in render
                     }
-                    Some(WidgetActions::AWSServiceNavigatorEvent(
-                        AWSServiceNavigatorEvent::ArrowDown,
+                    Some(WidgetAction::ServiceNavigatorEvent(
+                        ServiceNavigatorEvent::ArrowDown,
                         self.widget_type.clone(),
                     ))
                 }
@@ -445,8 +445,8 @@ impl WidgetExt for AWSServiceNavigator {
                         self.selected_index = self.selected_index.saturating_sub(jump_size);
                         self.update_scroll_offset(10); // Will be refined in render
                     }
-                    Some(WidgetActions::AWSServiceNavigatorEvent(
-                        AWSServiceNavigatorEvent::PageUp,
+                    Some(WidgetAction::ServiceNavigatorEvent(
+                        ServiceNavigatorEvent::PageUp,
                         self.widget_type.clone(),
                     ))
                 }
@@ -459,13 +459,13 @@ impl WidgetExt for AWSServiceNavigator {
                             (self.selected_index + jump_size).min(content_len - 1);
                         self.update_scroll_offset(10); // Will be refined in render
                     }
-                    Some(WidgetActions::AWSServiceNavigatorEvent(
-                        AWSServiceNavigatorEvent::PageDown,
+                    Some(WidgetAction::ServiceNavigatorEvent(
+                        ServiceNavigatorEvent::PageDown,
                         self.widget_type.clone(),
                     ))
                 }
-                KeyCode::Enter => Some(WidgetActions::AWSServiceNavigatorEvent(
-                    AWSServiceNavigatorEvent::Enter,
+                KeyCode::Enter => Some(WidgetAction::ServiceNavigatorEvent(
+                    ServiceNavigatorEvent::Enter,
                     self.widget_type.clone(),
                 )),
                 KeyCode::Home => {
@@ -474,8 +474,8 @@ impl WidgetExt for AWSServiceNavigator {
                         self.selected_index = 0;
                         self.scroll_offset = 0;
                     }
-                    Some(WidgetActions::AWSServiceNavigatorEvent(
-                        AWSServiceNavigatorEvent::Home,
+                    Some(WidgetAction::ServiceNavigatorEvent(
+                        ServiceNavigatorEvent::Home,
                         self.widget_type.clone(),
                     ))
                 }
@@ -486,8 +486,8 @@ impl WidgetExt for AWSServiceNavigator {
                         self.selected_index = content_len - 1;
                         self.update_scroll_offset(10); // Will be refined in render
                     }
-                    Some(WidgetActions::AWSServiceNavigatorEvent(
-                        AWSServiceNavigatorEvent::End,
+                    Some(WidgetAction::ServiceNavigatorEvent(
+                        ServiceNavigatorEvent::End,
                         self.widget_type.clone(),
                     ))
                 }
@@ -497,35 +497,35 @@ impl WidgetExt for AWSServiceNavigator {
     }
 
     /// Processes widget events and returns actions as needed
-    fn process_event(&mut self, event: WidgetActions) -> Option<WidgetActions> {
+    fn process_event(&mut self, event: WidgetAction) -> Option<WidgetAction> {
         match event {
-            WidgetActions::AWSServiceNavigatorEvent(event, _) => match event {
-                AWSServiceNavigatorEvent::ArrowUp => {
+            WidgetAction::ServiceNavigatorEvent(event, _) => match event {
+                ServiceNavigatorEvent::ArrowUp => {
                     // Already handled in handle_input
                     None
                 }
-                AWSServiceNavigatorEvent::ArrowDown => {
+                ServiceNavigatorEvent::ArrowDown => {
                     // Already handled in handle_input
                     None
                 }
-                AWSServiceNavigatorEvent::PageUp => {
+                ServiceNavigatorEvent::PageUp => {
                     // Already handled in handle_input
                     None
                 }
-                AWSServiceNavigatorEvent::PageDown => {
+                ServiceNavigatorEvent::PageDown => {
                     // Already handled in handle_input
                     None
                 }
-                AWSServiceNavigatorEvent::Home => {
+                ServiceNavigatorEvent::Home => {
                     // Already handled in handle_input
                     None
                 }
-                AWSServiceNavigatorEvent::End => {
+                ServiceNavigatorEvent::End => {
                     // Already handled in handle_input
                     None
                 }
-                AWSServiceNavigatorEvent::Enter => self.selected_item(),
-                AWSServiceNavigatorEvent::Escape => {
+                ServiceNavigatorEvent::Enter => self.selected_item(),
+                ServiceNavigatorEvent::Escape => {
                     if self.filter_mode {
                         self.filter_mode = false;
                         self.clear_filter(); // Clear the filter text when exiting filter mode
@@ -534,7 +534,7 @@ impl WidgetExt for AWSServiceNavigator {
                 }
                 _ => None,
             },
-            WidgetActions::InputBoxEvent(input_event) => match input_event {
+            WidgetAction::InputBoxEvent(input_event) => match input_event {
                 InputBoxEvent::Written(text) => {
                     if self.filter_mode {
                         self.apply_filter(&text);

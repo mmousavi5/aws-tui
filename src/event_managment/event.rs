@@ -6,7 +6,7 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 /// The frequency at which tick events are emitted.
-const TICK_FPS: f64 = 30.0;
+const TICK_RATE: f64 = 30.0;
 
 /// Main event enum for the application
 #[derive(Clone)]
@@ -24,8 +24,8 @@ pub enum Event {
 /// Events related to tab functionality
 #[derive(Clone)]
 pub enum TabEvent {
-    TabActions(TabActions),
-    WidgetActions(WidgetActions),
+    TabAction(TabAction),
+    WidgetActions(WidgetAction),
     ComponentActions(ComponentActions),
 }
 
@@ -46,7 +46,7 @@ pub enum CloudWatchComponentActions {
     PopupDetails(String),
     NextFocus,
     PreviousFocus,
-    WidgetActions(WidgetActions),
+    WidgetAction(WidgetAction),
 }
 
 /// Actions specific to S3 services
@@ -61,7 +61,7 @@ pub enum S3ComponentActions {
     NavigateUp,
     LoadPath(String, String), // bucket, path
     PopupDetails(String),
-    WidgetActions(WidgetActions),
+    WidgetAction(WidgetAction),
 }
 
 /// Actions specific to DynamoDB services
@@ -74,32 +74,32 @@ pub enum DynamoDBComponentActions {
     SetTitle(String),
     SetQuery(String),
     PopupDetails(String),
-    WidgetActions(WidgetActions),
+    WidgetActions(WidgetAction),
 }
 
 /// Actions that can be performed on widgets
 #[derive(Clone)]
-pub enum WidgetActions {
-    AWSServiceNavigatorEvent(AWSServiceNavigatorEvent, WidgetType),
+pub enum WidgetAction {
+    ServiceNavigatorEvent(ServiceNavigatorEvent, WidgetType),
     InputBoxEvent(InputBoxEvent),
     ParagraphEvent(ParagraphEvent),
-    ToggleFocus,
-    PopupEvent(PopupEvent),
+    ToggleFocusState,
+    PopupAction(PopupAction),
 }
 
 /// Actions specific to tab navigation and selection
 #[derive(Clone, Debug)]
-pub enum TabActions {
+pub enum TabAction {
     NextFocus,
     PreviousFocus,
-    ProfileSelected(String),
-    AWSServiceSelected(WidgetEventType),
+    SelectProfile(String),
+    SelectService(WidgetEventType),
 }
 
 /// Events for popup widgets
 #[derive(Clone)]
-pub enum PopupEvent {
-    SelectedItem(String),
+pub enum PopupAction {
+    ItemSelected(String),
     ArrowUp,
     ArrowDown,
     Enter,
@@ -109,8 +109,8 @@ pub enum PopupEvent {
 
 /// Events for AWS service navigation
 #[derive(Clone)]
-pub enum AWSServiceNavigatorEvent {
-    SelectedItem(WidgetEventType),
+pub enum ServiceNavigatorEvent {
+    ItemSelected(WidgetEventType),
     ArrowUp,
     ArrowDown,
     PageDown,
@@ -250,7 +250,7 @@ impl EventTask {
     /// This function emits tick events at a fixed rate and polls for crossterm events in between.
     async fn run(self) -> color_eyre::Result<()> {
         // Configure the tick rate for UI updates
-        let tick_rate = Duration::from_secs_f64(1.0 / TICK_FPS);
+        let tick_rate = Duration::from_secs_f64(1.0 / TICK_RATE);
         // Create an event stream for terminal input
         let mut reader = crossterm::event::EventStream::new();
         // Set up interval timer for regular tick events
