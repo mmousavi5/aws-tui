@@ -17,13 +17,18 @@ use std::any::Any;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+/// Component for interacting with AWS CloudWatch logs
 pub struct CloudWatch {
+    /// Common AWS component functionality
     base: AWSComponentBase,
+    /// Client for CloudWatch API interactions
     cloudwatch_client: Option<Arc<Mutex<CloudWatchClient>>>,
+    /// Currently selected CloudWatch log group
     selected_log_group: Option<String>,
 }
 
 impl CloudWatch {
+    /// Creates a new CloudWatch component with the provided event sender
     pub fn new(event_sender: tokio::sync::mpsc::UnboundedSender<Event>) -> Self {
         Self {
             base: AWSComponentBase::new(event_sender.clone(), NavigatorContent::Records(vec![])),
@@ -32,10 +37,12 @@ impl CloudWatch {
         }
     }
 
+    /// Assigns a CloudWatch client to this component
     pub fn set_client(&mut self, cloudwatch_client: Arc<Mutex<CloudWatchClient>>) {
         self.cloudwatch_client = Some(cloudwatch_client);
     }
 
+    /// Handles the selection of a log group and fetches its logs
     async fn handle_log_group_selection(&mut self, log_group: String) {
         self.selected_log_group = Some(log_group.clone());
         self.base
@@ -59,6 +66,7 @@ impl CloudWatch {
         }
     }
 
+    /// Performs a filtered search on logs from the specified log group
     async fn search_logs(&mut self, log_group: &str, filter_pattern: &str) {
         if let Some(client) = &self.cloudwatch_client {
             let logs = client
@@ -77,6 +85,7 @@ impl CloudWatch {
         }
     }
 
+    /// Shows detailed view of a log entry in a popup
     async fn view_log_details(&mut self, log_content: &str) {
         self.base
             .details_popup
@@ -124,7 +133,9 @@ impl AWSComponent for CloudWatch {
         }
     }
 
+    /// Handles keyboard input for the CloudWatch component
     fn handle_input(&mut self, key_event: KeyEvent) {
+        // Special handling for popup details if visible
         if self.base.details_popup.is_visible() {
             if let Some(signal) = self.base.details_popup.handle_input(key_event) {
                 self.base
@@ -160,6 +171,7 @@ impl AWSComponent for CloudWatch {
                     )))
                     .unwrap();
             }
+            // Alt+number shortcuts to switch focus between areas
             KeyCode::Char('1') if key_event.modifiers == KeyModifiers::ALT => {
                 self.base.current_focus = ComponentFocus::Navigation;
                 self.base.update_widget_states();
@@ -179,6 +191,7 @@ impl AWSComponent for CloudWatch {
                 }
             }
             _ => {
+                // Forward input to the currently focused widget
                 if let Some(signal) = match self.base.current_focus {
                     ComponentFocus::Navigation => self.base.navigator.handle_input(key_event),
                     ComponentFocus::Input => self.base.input.handle_input(key_event),
@@ -198,29 +211,36 @@ impl AWSComponent for CloudWatch {
         }
     }
 
+    /// Processes CloudWatch-specific component actions
     async fn process_event(&mut self, event: ComponentActions) {
         match event {
             ComponentActions::CloudWatchComponentActions(cw_event) => match cw_event {
+                // Handle selection of a log group from the list
                 CloudWatchComponentActions::SelectLogGroup(log_group) => {
                     self.handle_log_group_selection(log_group).await;
                 }
+                // Handle search/filter request for logs
                 CloudWatchComponentActions::SearchLogs(filter) => {
                     if let Some(log_group) = &self.selected_log_group {
                         let log_group_clone = log_group.clone();
                         self.search_logs(&log_group_clone, &filter).await;
                     }
                 }
+                // Display detailed view of a log entry
                 CloudWatchComponentActions::ViewLogDetails(log_content) => {
                     self.view_log_details(&log_content).await;
                 }
+                // Cycle focus forward through widgets
                 CloudWatchComponentActions::NextFocus => {
                     self.base.focus_next();
                     self.base.update_widget_states();
                 }
+                // Cycle focus backward through widgets
                 CloudWatchComponentActions::PreviousFocus => {
                     self.base.focus_previous();
                     self.base.update_widget_states();
                 }
+                // Show details in popup window
                 CloudWatchComponentActions::PopupDetails(details) => {
                     self.base
                         .details_popup
@@ -228,6 +248,7 @@ impl AWSComponent for CloudWatch {
                     self.base.details_popup.set_visible(true);
                     self.base.details_popup.set_active(true);
                 }
+                // Process events from child widgets
                 CloudWatchComponentActions::WidgetActions(widget_action) => match widget_action {
                     WidgetActions::AWSServiceNavigatorEvent(
                         ref _aws_navigator_event,
@@ -238,6 +259,7 @@ impl AWSComponent for CloudWatch {
                                 self.base.navigator.process_event(widget_action.clone())
                             {
                                 match signal {
+                                    // User selected a log group from the navigator
                                     WidgetActions::AWSServiceNavigatorEvent(
                                         AWSServiceNavigatorEvent::SelectedItem(
                                             WidgetEventType::RecordSelected(log_group),
@@ -265,6 +287,7 @@ impl AWSComponent for CloudWatch {
                                 .process_event(widget_action.clone())
                             {
                                 match signal {
+                                    // User selected a log entry to view details
                                     WidgetActions::AWSServiceNavigatorEvent(
                                         AWSServiceNavigatorEvent::SelectedItem(
                                             WidgetEventType::RecordSelected(log_content),
@@ -307,6 +330,7 @@ impl AWSComponent for CloudWatch {
                             }
                         }
                     }
+                    // Close popup when exit event received
                     WidgetActions::PopupEvent(_) => {
                         self.base.details_popup.set_visible(false);
                         self.base.details_popup.set_active(false);
@@ -318,6 +342,7 @@ impl AWSComponent for CloudWatch {
         }
     }
 
+    /// Sets the active state of this component
     fn set_active(&mut self, active: bool) {
         self.base.active = active;
         self.base.update_widget_states();
@@ -335,6 +360,7 @@ impl AWSComponent for CloudWatch {
         self.base.visible
     }
 
+    /// Fetches and displays the list of CloudWatch log groups
     async fn update(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(client) = &self.cloudwatch_client {
             let client = client.lock().await;
@@ -359,6 +385,7 @@ impl AWSComponent for CloudWatch {
         self.base.current_focus
     }
 
+    /// Resets focus to the navigation pane
     fn reset_focus(&mut self) {
         self.base.current_focus = ComponentFocus::Navigation;
         self.base.update_widget_states();
@@ -368,6 +395,7 @@ impl AWSComponent for CloudWatch {
         self
     }
 
+    /// Restores focus to the last active widget
     fn set_focus_to_last(&mut self) {
         self.base.set_focus_to_last();
         self.base.update_widget_states();

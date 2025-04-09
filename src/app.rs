@@ -1,3 +1,8 @@
+//! Application module
+//!
+//! Provides the main application state and event loop functionality.
+//! Manages tabs, event handling, and the core application lifecycle.
+
 use crate::components::tab::Tab;
 use crate::event_managment::event::TabEvent;
 use crate::event_managment::event::{AppEvent, Event, EventHandler};
@@ -6,21 +11,24 @@ use ratatui::{
     crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
 };
 
-/// Application.
+/// Main application state container
+///
+/// Manages application lifecycle, tab collection and event flow
 pub struct App {
-    /// Is the application running?
+    /// Whether the application is still running
     pub running: bool,
-    /// Counter.
+    /// Generic counter for application state
     pub counter: u8,
-    /// Event handler.
+    /// Event handler for processing UI and system events
     pub events: EventHandler,
-    ///
-    pub active_tab: usize, // Track the active tab
-    ///
+    /// Index of the currently active tab
+    pub active_tab: usize,
+    /// Collection of all tabs in the application
     pub tabs: Vec<Tab>,
 }
 
 impl Default for App {
+    /// Creates a default application state with initial tabs
     fn default() -> Self {
         let events = EventHandler::new();
         Self {
@@ -38,12 +46,14 @@ impl Default for App {
 }
 
 impl App {
-    /// Constructs a new instance of [`App`].
+    /// Constructs a new instance of [`App`]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Run the application's main loop.
+    /// Run the application's main event loop
+    ///
+    /// Processes events and updates the terminal UI until the application exits
     pub async fn run(mut self, mut terminal: DefaultTerminal) -> color_eyre::Result<()> {
         while self.running {
             terminal.draw(|frame| frame.render_widget(&self, frame.area()))?;
@@ -64,7 +74,9 @@ impl App {
         Ok(())
     }
 
-    /// Handles the key events and updates the state of [`App`].
+    /// Processes keyboard events and routes them to appropriate handlers
+    ///
+    /// Handles global shortcuts and routes other keypresses to the active tab
     pub fn handle_key_events(&mut self, key_event: KeyEvent) -> color_eyre::Result<()> {
         match key_event.code {
             // Mac-style shortcuts (Command/⌘ is mapped to CONTROL in terminal apps)
@@ -92,6 +104,9 @@ impl App {
         Ok(())
     }
 
+    /// Updates application state based on application events
+    ///
+    /// Handles tab switching, creation, closure and application exit
     pub fn apply_app_state(&mut self, app_state: AppEvent) {
         match app_state {
             AppEvent::NextTab => self.next_tab(),
@@ -113,6 +128,9 @@ impl App {
         }
     }
 
+    /// Routes tab events to the currently active tab
+    ///
+    /// Used for handling events targeted at specific tabs like profile selection
     pub async fn apply_tab_state(&mut self, tab_event: TabEvent) {
         // match tab_state {
         //     TabEvent::TabActions(TabActions::ProfileSelected(profile)) => self.set_active_tab_name(&profile),
@@ -123,18 +141,17 @@ impl App {
         }
     }
 
-    /// Handles the tick event of the terminal.
+    /// Handles the tick event of the terminal
     ///
-    /// The tick event is where you can update the state of your application with any logic that
-    /// needs to be updated at a fixed frame rate. E.g. polling a server, updating an animation.
+    /// Called at a fixed frame rate to update animations or poll external systems
     pub fn tick(&self) {}
 
-    /// Set running to false to quit the application.
+    /// Terminates the application by setting running to false
     pub fn quit(&mut self) {
         self.running = false;
     }
 
-    /// Switch to the next tab.
+    /// Cycles to the next tab in the tab collection
     pub fn next_tab(&mut self) {
         // self.tabs[self.active_tab].show_popup = false;
         self.active_tab = (self.active_tab + 1) % self.tabs.len();

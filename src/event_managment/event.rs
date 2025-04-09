@@ -4,30 +4,24 @@ use ratatui::crossterm::event::Event as CrosstermEvent;
 use ratatui::crossterm::event::KeyEvent;
 use std::time::Duration;
 use tokio::sync::mpsc;
+
 /// The frequency at which tick events are emitted.
 const TICK_FPS: f64 = 30.0;
 
-/// Representation of all possible events.
+/// Main event enum for the application
 #[derive(Clone)]
 pub enum Event {
-    /// An event that is emitted on a regular schedule.
-    ///
-    /// Use this event to run any code which has to run outside of being a direct response to a user
-    /// event. e.g. polling exernal systems, updating animations, or rendering the UI based on a
-    /// fixed frame rate.
+    /// Regular interval event for animations and polling
     Tick,
-    /// Crossterm events.
-    ///
-    /// These events are emitted by the terminal.
+    /// Terminal events from crossterm
     Crossterm(CrosstermEvent),
-    /// Application events.
-    ///
-    /// Use this event to emit custom events that are specific to your application.
+    /// Custom application-level events
     App(AppEvent),
-    /// Tab events.
+    /// Tab-related events
     Tab(TabEvent),
 }
 
+/// Events related to tab functionality
 #[derive(Clone)]
 pub enum TabEvent {
     TabActions(TabActions),
@@ -35,12 +29,15 @@ pub enum TabEvent {
     ComponentActions(ComponentActions),
 }
 
+/// Actions for AWS service components
 #[derive(Clone)]
 pub enum ComponentActions {
     S3ComponentActions(S3ComponentActions),
     DynamoDBComponentActions(DynamoDBComponentActions),
     CloudWatchComponentActions(CloudWatchComponentActions),
 }
+
+/// Actions specific to CloudWatch services
 #[derive(Clone)]
 pub enum CloudWatchComponentActions {
     SelectLogGroup(String),
@@ -52,6 +49,7 @@ pub enum CloudWatchComponentActions {
     WidgetActions(WidgetActions),
 }
 
+/// Actions specific to S3 services
 #[derive(Clone)]
 pub enum S3ComponentActions {
     ArrowUp,
@@ -66,6 +64,7 @@ pub enum S3ComponentActions {
     WidgetActions(WidgetActions),
 }
 
+/// Actions specific to DynamoDB services
 #[derive(Clone)]
 pub enum DynamoDBComponentActions {
     ArrowUp,
@@ -78,6 +77,7 @@ pub enum DynamoDBComponentActions {
     WidgetActions(WidgetActions),
 }
 
+/// Actions that can be performed on widgets
 #[derive(Clone)]
 pub enum WidgetActions {
     AWSServiceNavigatorEvent(AWSServiceNavigatorEvent, WidgetType),
@@ -87,6 +87,7 @@ pub enum WidgetActions {
     PopupEvent(PopupEvent),
 }
 
+/// Actions specific to tab navigation and selection
 #[derive(Clone, Debug)]
 pub enum TabActions {
     NextFocus,
@@ -95,6 +96,7 @@ pub enum TabActions {
     AWSServiceSelected(WidgetEventType),
 }
 
+/// Events for popup widgets
 #[derive(Clone)]
 pub enum PopupEvent {
     SelectedItem(String),
@@ -105,6 +107,7 @@ pub enum PopupEvent {
     Cancel,
 }
 
+/// Events for AWS service navigation
 #[derive(Clone)]
 pub enum AWSServiceNavigatorEvent {
     SelectedItem(WidgetEventType),
@@ -119,6 +122,7 @@ pub enum AWSServiceNavigatorEvent {
     Cancel,
 }
 
+/// Events for input box widgets
 #[derive(Clone)]
 pub enum InputBoxEvent {
     ArrowUp,
@@ -134,6 +138,7 @@ pub enum InputBoxEvent {
     KeyPress(KeyEvent),
 }
 
+/// Events for paragraph widgets
 #[derive(Clone)]
 pub enum ParagraphEvent {
     ArrowUp,
@@ -143,18 +148,16 @@ pub enum ParagraphEvent {
     Cancel,
 }
 
+/// Types of widgets that can be interacted with
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum WidgetEventType {
-    /// AWS profile event.
     S3,
-    /// Active tab event.
     DynamoDB,
     CloudWatch,
-    RecordSelected(String), // Add this new variant
+    RecordSelected(String),
 }
 
 impl WidgetEventType {
-    // Update the VALUES array to include CloudWatch
     pub const VALUES: [Self; 3] = [Self::S3, Self::DynamoDB, Self::CloudWatch];
 }
 
@@ -168,23 +171,18 @@ impl std::fmt::Display for WidgetEventType {
         }
     }
 }
-/// Application events.
-///
-/// You can extend this enum with your own custom events.
+
+/// High-level application events
 #[derive(Clone, Debug)]
 pub enum AppEvent {
-    /// Switch to the next tab.
     NextTab,
-    /// Switch to the previous tab.
     PreviousTab,
-    /// Create a new tab.
     CreateTab,
-    /// Close the current tab.
     CloseTab,
-    /// Quit the application.
     Quit,
 }
 
+/// Identifiers for different widget types in the application
 #[derive(Hash, Eq, PartialEq, Clone, Copy)]
 pub enum WidgetType {
     Default,
@@ -197,17 +195,18 @@ pub enum WidgetType {
     QueryResultsNavigator,
 }
 
-/// Terminal event handler.
+/// Handles event processing and distribution
 #[derive(Debug)]
 pub struct EventHandler {
-    /// Event sender channel.
+    /// Channel for sending events
     pub sender: mpsc::UnboundedSender<Event>,
-    /// Event receiver channel.
+    /// Channel for receiving events
     receiver: mpsc::UnboundedReceiver<Event>,
 }
 
 impl EventHandler {
-    /// Constructs a new instance of [`EventHandler`] and spawns a new thread to handle events.
+    /// Creates a new EventHandler with a channel for communication
+    /// and spawns a background task to process events
     pub fn new() -> Self {
         let (sender, receiver) = mpsc::unbounded_channel();
         let actor = EventTask::new(sender.clone());
@@ -215,15 +214,9 @@ impl EventHandler {
         Self { sender, receiver }
     }
 
-    /// Receives an event from the sender.
-    ///
-    /// This function blocks until an event is received.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the sender channel is disconnected. This can happen if an
-    /// error occurs in the event thread. In practice, this should not happen unless there is a
-    /// problem with the underlying terminal.
+    /// Waits for and returns the next event from the channel
+    /// 
+    /// Returns an error if the event source disconnects
     pub async fn next(&mut self) -> color_eyre::Result<Event> {
         self.receiver
             .recv()
@@ -231,25 +224,23 @@ impl EventHandler {
             .ok_or_eyre("Failed to receive event")
     }
 
-    /// Queue an app event to be sent to the event receiver.
-    ///
-    /// This is useful for sending events to the event handler which will be processed by the next
-    /// iteration of the application's event loop.
+    /// Queues an event to be processed in the next iteration of the event loop
+    /// 
+    /// Useful for internal event generation within the application
     pub fn send(&mut self, event: Event) {
-        // Ignore the result as the reciever cannot be dropped while this struct still has a
-        // reference to it
+        // Ignore the result as the receiver cannot be dropped while this struct exists
         let _ = self.sender.send(event);
     }
 }
 
-/// A thread that handles reading crossterm events and emitting tick events on a regular schedule.
+/// Handles event generation and dispatching for the application
 struct EventTask {
-    /// Event sender channel.
+    /// Channel for sending events to the main application
     sender: mpsc::UnboundedSender<Event>,
 }
 
 impl EventTask {
-    /// Constructs a new instance of [`EventThread`].
+    /// Creates a new event task with the provided sender channel
     fn new(sender: mpsc::UnboundedSender<Event>) -> Self {
         Self { sender }
     }
@@ -258,19 +249,25 @@ impl EventTask {
     ///
     /// This function emits tick events at a fixed rate and polls for crossterm events in between.
     async fn run(self) -> color_eyre::Result<()> {
-        let tick_rate = Duration::from_secs_f64(TICK_FPS);
+        // Configure the tick rate for UI updates
+        let tick_rate = Duration::from_secs_f64(1.0 / TICK_FPS);
+        // Create an event stream for terminal input
         let mut reader = crossterm::event::EventStream::new();
+        // Set up interval timer for regular tick events
         let mut tick = tokio::time::interval(tick_rate);
         loop {
             let tick_delay = tick.tick();
             let crossterm_event = reader.next().fuse();
             tokio::select! {
+              // Exit if the receiver channel is closed
               _ = self.sender.closed() => {
                 break;
               }
+              // Send a tick event at regular intervals
               _ = tick_delay => {
                 self.send(Event::Tick);
               }
+              // Process terminal input events
               Some(Ok(evt)) = crossterm_event => {
                 self.send(Event::Crossterm(evt));
               }
@@ -280,6 +277,9 @@ impl EventTask {
     }
 
     /// Sends an event to the receiver.
+    /// 
+    /// This is internal to the event task and should not be confused with
+    /// the public EventHandler::send method.
     fn send(&self, event: Event) {
         // Ignores the result because shutting down the app drops the receiver, which causes the send
         // operation to fail. This is expected behavior and should not panic.

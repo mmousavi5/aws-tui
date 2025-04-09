@@ -9,20 +9,32 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
 };
 
+/// Base component providing common functionality for all AWS service components
 pub struct AWSComponentBase {
+    /// Left navigator widget for service/bucket/table lists
     pub navigator: AWSServiceNavigator,
+    /// Input widget for search/filter/query commands
     pub input: InputBoxWidget,
+    /// Results area displaying query results or service content
     pub results_navigator: AWSServiceNavigator,
+    /// Popup for displaying details and additional information
     pub details_popup: PopupWidget,
+    /// Whether the component is currently active
     pub active: bool,
+    /// Whether the component is currently visible
     pub visible: bool,
+    /// Channel for sending events to the application
     pub event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
+    /// Current focus state within the component
     pub current_focus: ComponentFocus,
+    /// Currently selected item (bucket, table, log group, etc.)
     pub selected_item: Option<String>,
+    /// Current query string being executed
     pub selected_query: Option<String>,
 }
 
 impl AWSComponentBase {
+    /// Creates a new base component with default widget configuration
     pub fn new(
         event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
         navigator_content: NavigatorContent,
@@ -49,6 +61,7 @@ impl AWSComponentBase {
         }
     }
 
+    /// Renders the component with standard three-panel layout
     pub fn render(&self, area: Rect, buf: &mut Buffer) {
         if !self.visible {
             return;
@@ -82,6 +95,7 @@ impl AWSComponentBase {
         }
     }
 
+    /// Updates active states of all widgets based on current focus
     pub fn update_widget_states(&mut self) {
         self.navigator
             .set_active(self.active & (self.current_focus == ComponentFocus::Navigation));
@@ -91,6 +105,7 @@ impl AWSComponentBase {
             .set_active(self.active & (self.current_focus == ComponentFocus::Results));
     }
 
+    /// Shifts focus to the previous widget in the cyclic order
     pub fn focus_previous(&mut self) -> ComponentFocus {
         self.current_focus = match self.current_focus {
             ComponentFocus::Navigation => ComponentFocus::None,
@@ -101,6 +116,7 @@ impl AWSComponentBase {
         self.current_focus
     }
 
+    /// Shifts focus to the next widget in the cyclic order
     pub fn focus_next(&mut self) -> ComponentFocus {
         self.current_focus = match self.current_focus {
             ComponentFocus::Navigation => ComponentFocus::Input,
@@ -111,11 +127,13 @@ impl AWSComponentBase {
         self.current_focus
     }
 
+    /// Sets focus to the results area (typically the last widget in focus order)
     pub fn set_focus_to_last(&mut self) -> ComponentFocus {
         self.current_focus = ComponentFocus::Results;
         self.current_focus
     }
 
+    /// Returns contextual help items based on current component state
     pub fn get_help_items(&self) -> Vec<(String, String)> {
         let mut items = vec![];
 

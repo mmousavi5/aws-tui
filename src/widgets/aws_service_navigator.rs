@@ -12,26 +12,31 @@ use ratatui::{
 };
 use std::any::Any;
 
+/// Content types that can be displayed in the navigator
+/// Services are AWS service types, Records are string entries like log groups
 #[derive(Clone)]
 pub enum NavigatorContent {
     Services(Vec<WidgetEventType>),
     Records(Vec<String>),
 }
 
+/// Widget for navigating AWS services or records with filtering capabilities
+/// Handles navigation, selection, and filtering of items
 pub struct AWSServiceNavigator {
     title: String,
     widget_type: WidgetType,
-    content: NavigatorContent,
-    filtered_content: NavigatorContent, // Store filtered content separately
-    filter_text: String,                // Track current filter text
-    selected_index: usize,
-    scroll_offset: usize,
-    active: bool,
-    visible: bool,
-    filter_mode: bool, // Track if we're in filter mode
+    content: NavigatorContent,          // Original unfiltered content
+    filtered_content: NavigatorContent, // Content after applying filters
+    filter_text: String,                // Current filter string
+    selected_index: usize,              // Currently selected item
+    scroll_offset: usize,               // Scroll position for viewing large lists
+    active: bool,                       // Whether this widget has focus
+    visible: bool,                      // Whether this widget should be rendered
+    filter_mode: bool,                  // Whether filter input mode is active
 }
 
 impl AWSServiceNavigator {
+    /// Creates a new navigator with the specified widget type, active state, and content
     pub fn new(widget_type: WidgetType, active: bool, content: NavigatorContent) -> Self {
         Self {
             title: "AWS Services".to_string(),
@@ -43,10 +48,11 @@ impl AWSServiceNavigator {
             scroll_offset: 0,
             active,
             visible: true,
-            filter_mode: false, // Start in filter mode
+            filter_mode: false, // Start with filter mode disabled
         }
     }
 
+    /// Returns the number of items in the current (filtered) content
     fn content_len(&self) -> usize {
         match &self.filtered_content {
             NavigatorContent::Services(services) => services.len(),
@@ -54,6 +60,7 @@ impl AWSServiceNavigator {
         }
     }
 
+    /// Returns a widget action for the currently selected item
     fn selected_item(&self) -> Option<WidgetActions> {
         match &self.filtered_content {
             NavigatorContent::Services(services) => {
@@ -85,6 +92,7 @@ impl AWSServiceNavigator {
         }
     }
 
+    /// Adjusts scroll position to keep selected item visible
     fn update_scroll_offset(&mut self, height: usize) {
         // Make sure height is at least 1 to avoid division by zero
         let height = height.max(1);
@@ -103,7 +111,7 @@ impl AWSServiceNavigator {
         }
     }
 
-    // Apply a filter to the content
+    /// Applies a filter to the content, showing only items containing the filter text
     pub fn apply_filter(&mut self, filter: &str) {
         self.filter_text = filter.to_lowercase();
 
@@ -143,14 +151,14 @@ impl AWSServiceNavigator {
         }
     }
 
-    // Add character to filter and apply it
+    /// Adds a character to the filter and applies it
     fn add_to_filter(&mut self, c: char) {
         self.filter_text.push(c);
         let filter_text_clone = self.filter_text.clone();
         self.apply_filter(&filter_text_clone);
     }
 
-    // Remove last character from filter and apply it
+    /// Removes the last character from the filter and applies it
     fn remove_from_filter(&mut self) {
         if let Some(_) = self.filter_text.pop() {
             let filter_text_clone = self.filter_text.clone();
@@ -158,13 +166,15 @@ impl AWSServiceNavigator {
         }
     }
 
-    // Reset filter
+    /// Clears the filter and shows all content
     fn clear_filter(&mut self) {
         self.filter_text.clear();
         self.filtered_content = self.content.clone();
         self.filter_mode = false;
     }
 
+    /// Sets new content for the navigator
+    /// If a filter is active, it will be applied to the new content
     pub fn set_content(&mut self, content: NavigatorContent) {
         self.content = content.clone();
 
@@ -182,17 +192,20 @@ impl AWSServiceNavigator {
 }
 
 impl WidgetExt for AWSServiceNavigator {
+    /// Renders the navigator widget to the buffer
     fn render(&self, area: Rect, buf: &mut Buffer) {
         if !self.visible {
             return;
         }
 
+        // Set border style based on active state
         let border_style = if self.active {
             Style::default().fg(Color::Red)
         } else {
             Style::default().fg(Color::White)
         };
 
+        // Modify title to show filter status
         let mut title = self.title.clone();
         if self.filter_mode {
             title = format!("[Filter: {}] {} ", self.filter_text, title);
@@ -200,12 +213,14 @@ impl WidgetExt for AWSServiceNavigator {
             title = format!("[Filtered: {}] {} ", self.filter_text, title);
         }
 
+        // Create outer block with title and active border
         let outer_block = Block::default()
             .title(title)
             .borders(Borders::ALL)
             .border_type(BorderType::Double)
             .border_style(border_style);
 
+        // Create inner block for content area
         let inner_block = Block::default()
             .title(match &self.content {
                 NavigatorContent::Services(_) => "Available Services",
@@ -217,10 +232,11 @@ impl WidgetExt for AWSServiceNavigator {
 
         outer_block.render(area, buf);
 
+        // Calculate inner area for content
         let inner_area = Rect::new(area.x + 2, area.y + 2, area.width - 4, area.height - 4);
-
         inner_block.render(inner_area, buf);
 
+        // Text content area with padding
         let text_area = Rect::new(
             inner_area.x + 2,
             inner_area.y + 1,
@@ -247,7 +263,7 @@ impl WidgetExt for AWSServiceNavigator {
             return;
         }
 
-        // Generate content with scroll indicators
+        // Generate content with scroll indicators and filtered items
         let mut content_lines = Vec::new();
 
         // Add filter help text at top if in filter mode
@@ -323,11 +339,13 @@ impl WidgetExt for AWSServiceNavigator {
             content_lines.push("▼ Scroll down for more".to_string());
         }
 
+        // Render the content
         let content_text = content_lines.join("\n");
         let paragraph = Paragraph::new(content_text).alignment(Alignment::Left);
         paragraph.render(text_area, buf);
     }
 
+    /// Handles keyboard input and returns appropriate widget actions
     fn handle_input(&mut self, key_event: KeyEvent) -> Option<WidgetActions> {
         // If we're in filter mode, handle text input
         if self.filter_mode {
@@ -478,6 +496,7 @@ impl WidgetExt for AWSServiceNavigator {
         }
     }
 
+    /// Processes widget events and returns actions as needed
     fn process_event(&mut self, event: WidgetActions) -> Option<WidgetActions> {
         match event {
             WidgetActions::AWSServiceNavigatorEvent(event, _) => match event {
@@ -534,6 +553,7 @@ impl WidgetExt for AWSServiceNavigator {
         }
     }
 
+    /// Returns help items based on the current state
     fn get_help_items(&self) -> Vec<(String, String)> {
         let mut items = vec![];
 
@@ -560,30 +580,37 @@ impl WidgetExt for AWSServiceNavigator {
         items
     }
 
+    /// Returns whether the widget is visible
     fn is_visible(&self) -> bool {
         self.visible
     }
 
+    /// Sets the active state of the widget
     fn set_active(&mut self, active: bool) {
         self.active = active;
     }
 
+    /// Sets the widget to inactive
     fn set_inactive(&mut self) {
         self.active = false;
     }
 
+    /// Sets the visibility of the widget
     fn set_visible(&mut self, visible: bool) {
         self.visible = visible;
     }
 
+    /// Sets the title of the widget
     fn set_title(&mut self, title: String) {
         self.title = title;
     }
 
+    /// Returns self as Any for downcasting
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
 
+    /// Returns whether the widget is active
     fn is_active(&self) -> bool {
         self.active
     }

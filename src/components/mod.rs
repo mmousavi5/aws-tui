@@ -44,14 +44,22 @@ pub trait AWSComponent: Send {
     /// Cast to Any for downcasting
     fn as_any_mut(&mut self) -> &mut dyn Any;
 
+    /// Restore focus to the last active widget
     fn set_focus_to_last(&mut self);
+    
+    /// Get contextual help information for the component
     fn get_help_items(&self) -> Vec<(String, String)>;
 }
 
+/// Represents the current input focus within a component
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ComponentFocus {
+    /// Focus on the left navigation area (service list/tables/buckets)
     Navigation,
+    /// Focus on the input area (search/filter/command box)
     Input,
+    /// Focus on the results display area
     Results,
+    /// No focus set
     None,
 }

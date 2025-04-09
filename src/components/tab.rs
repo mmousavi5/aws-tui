@@ -32,25 +32,37 @@ const TAB_HEIGHT: u16 = 3;
 const POPUP_PADDING: u16 = 5;
 const HELP_HEIGHT: u16 = 2;
 
+/// Indicates which side of the tab is currently in focus
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TabFocus {
-    Left,
-    Right,
+    Left,  // Service navigator is focused
+    Right, // Service component is focused
 }
 
+/// Represents a tab within the application containing AWS service components
 pub struct Tab {
+    /// Display name for the tab (usually AWS profile name)
     pub name: String,
+    /// Whether the profile selection popup is active
     popup_mod: bool,
+    /// Optional popup widget for profile selection
     popup_widget: Option<Box<dyn WidgetExt>>,
+    /// Map of service components on the right side
     right_widgets: HashMap<WidgetType, Box<dyn AWSComponent>>,
+    /// Navigator widget on the left side
     left_widgets: Box<dyn WidgetExt>,
+    /// Currently active AWS service
     active_right_widget: WidgetType,
+    /// Channel for sending events 
     event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
+    /// Current tab focus state
     current_focus: TabFocus,
+    /// AWS service clients for this tab
     aws_clients: TabClients,
 }
 
 impl Tab {
+    /// Creates a new tab with initial AWS service components
     pub fn new(
         name: &str,
         content: &str,
@@ -86,10 +98,13 @@ impl Tab {
             aws_clients: TabClients::new(String::new(), String::from("eu-west-1")),
         }
     }
+    
+    /// Changes the active AWS service
     pub fn set_active_service(&mut self, service_type: WidgetType) {
         self.active_right_widget = service_type;
     }
 
+    /// Handles keyboard input events for the tab
     pub fn handle_input(&mut self, event: KeyEvent) {
         if self.popup_mod {
             if let Some(popup) = self.popup_widget.as_mut() {
@@ -130,6 +145,8 @@ impl Tab {
             }
         }
     }
+    
+    /// Processes tab events and routes them to appropriate handlers
     pub async fn process_event(&mut self, tab_event: TabEvent) {
         match tab_event {
             TabEvent::TabActions(tab_action) => {
@@ -211,11 +228,14 @@ impl Tab {
         }
     }
 
+    /// Handles tab-level actions like focus changes and profile selection
     pub async fn process_tab_action(&mut self, tab_action: TabActions) {
         match tab_action {
+            // Handle AWS profile selection
             TabActions::ProfileSelected(profile) => {
                 self.set_name(profile);
             }
+            // Handle AWS service selection from the left navigator
             TabActions::AWSServiceSelected(service) => match service {
                 WidgetEventType::DynamoDB => {
                     self.active_right_widget = WidgetType::DynamoDB;
@@ -250,6 +270,7 @@ impl Tab {
                 }
                 _ => {}
             },
+            // Forward tab focus to the next widget
             TabActions::NextFocus => {
                 if self.current_focus == TabFocus::Left {
                     self.current_focus = TabFocus::Right;
@@ -299,6 +320,7 @@ impl Tab {
                     }
                 }
             }
+            // Move tab focus to the previous widget
             TabActions::PreviousFocus => {
                 if self.current_focus == TabFocus::Right {
                     if let Some(widget) = self.right_widgets.get_mut(&self.active_right_widget) {
@@ -352,17 +374,20 @@ impl Tab {
             }
         }
     }
-    // Public getters and setters
+    
+    /// Get the tab's name/title
     pub fn name(&self) -> &str {
         &self.name
     }
 
+    /// Set the tab name and configure the AWS profile
     pub fn set_name(&mut self, name: String) {
         self.name = name;
         self.popup_mod = false;
         self.aws_clients.set_profile(self.name.clone());
     }
 
+    /// Renders the entire tab including tab bar, content, and help toolbar
     pub fn render(&self, area: Rect, buf: &mut Buffer, tab_titles: Vec<String>, active_tab: usize) {
         self.render_tab_bar(area, buf, tab_titles, active_tab);
         let content_area = self.get_content_area(area);
@@ -383,8 +408,7 @@ impl Tab {
         self.render_help_toolbar(main_layout[1], buf);
     }
 
-    // Update the render_help_toolbar method
-
+    /// Renders a contextual help toolbar at the bottom of the tab
     fn render_help_toolbar(&self, area: Rect, buf: &mut Buffer) {
         let help_style = Style::default().fg(Color::DarkGray);
         let key_style = Style::default()
@@ -443,6 +467,7 @@ impl Tab {
         help_paragraph.render(area, buf);
     }
 
+    /// Renders the tab bar at the top of the screen
     fn render_tab_bar(
         &self,
         area: Rect,
@@ -468,6 +493,7 @@ impl Tab {
         tabs.render(tab_area, buf);
     }
 
+    /// Calculates the content area below the tab bar
     fn get_content_area(&self, area: Rect) -> Rect {
         Rect::new(
             area.x,
@@ -477,6 +503,7 @@ impl Tab {
         )
     }
 
+    /// Creates the main horizontal layout for left/right panels
     fn create_layout(&self, area: Rect) -> Vec<Rect> {
         Layout::default()
             .direction(Direction::Horizontal)
@@ -485,7 +512,7 @@ impl Tab {
             .to_vec()
     }
 
-    // Update the render_widgets method
+    /// Renders the main widget areas for the tab
     fn render_widgets(&self, area: Rect, buf: &mut Buffer) {
         let popup_area = self.calculate_popup_area(area);
         let layout: Vec<Rect> = self.create_layout(area);
@@ -530,6 +557,7 @@ impl Tab {
         }
     }
 
+    /// Calculates the centered area for the popup window
     fn calculate_popup_area(&self, base_area: Rect) -> Rect {
         Rect::new(
             base_area.x + POPUP_PADDING,

@@ -1,3 +1,8 @@
+//! S3 client module
+//! 
+//! Provides functionality to interact with AWS S3 service,
+//! including listing buckets, browsing objects, and retrieving object metadata.
+
 use aws_config::{BehaviorVersion, Region};
 use aws_sdk_s3::Client;
 use aws_sdk_s3::error::SdkError;
@@ -5,14 +10,18 @@ use serde_json::json;
 use std::time::Duration;
 use thiserror::Error;
 
+/// Errors that can occur when interacting with S3
 #[derive(Error, Debug)]
 pub enum S3ClientError {
+    /// Error returned from the AWS SDK
     #[error("AWS SDK error: {0}")]
     AwsError(String),
 
+    /// Authentication or connection error with AWS
     #[error("Failed to connect with profile: {0}")]
     ConnectionFailed(String),
 
+    /// Error converting data to JSON format
     #[error("Serialization error: {0}")]
     SerializationError(String),
 }
@@ -24,13 +33,18 @@ impl<T, E> From<SdkError<T, E>> for S3ClientError {
     }
 }
 
+/// Client for AWS S3 API operations
 pub struct S3Client {
+    /// AWS SDK S3 client
     client: Client,
 }
 
 impl S3Client {
+    /// Creates a new S3 client with the specified AWS profile and region
+    ///
+    /// Attempts to connect to verify credentials are valid before returning
     pub async fn new(profile: String, region: String) -> Result<Self, S3ClientError> {
-        // Replace from_env() with defaults()
+        // Configure AWS SDK with profile, region and timeouts
         let config = aws_config::defaults(BehaviorVersion::latest())
             .profile_name(&profile)
             .region(Region::new(region))
@@ -51,10 +65,13 @@ impl S3Client {
         }
     }
 
+    /// Lists all S3 buckets the user has access to
+    ///
+    /// Returns a vector of bucket names as strings
     pub async fn list_buckets(&self) -> Result<Vec<String>, S3ClientError> {
         let resp = self.client.list_buckets().send().await?;
 
-        // Fixed: use unwrap_or_else with an empty vector
+        // Extract bucket names from response
         let buckets = resp.buckets();
         let bucket_names = buckets
             .iter()
@@ -64,6 +81,9 @@ impl S3Client {
         Ok(bucket_names)
     }
 
+    /// Lists objects in a bucket with optional prefix (folder path)
+    ///
+    /// Returns a vector of JSON strings containing object metadata
     pub async fn list_objects(
         &self,
         bucket_name: &str,
@@ -80,7 +100,6 @@ impl S3Client {
         let resp = request.send().await?;
 
         // Check if we have any objects
-        // Fixed: use unwrap_or_else with an empty slice
         if resp.contents().is_empty() {
             return Ok(vec!["No objects found".to_string()]);
         }
@@ -117,6 +136,9 @@ impl S3Client {
         Ok(objects)
     }
 
+    /// Gets detailed metadata about a specific S3 object
+    ///
+    /// Returns a pretty-printed JSON string with all available object information
     pub async fn get_object_details(
         &self,
         bucket_name: &str,
