@@ -6,7 +6,7 @@ use crate::event_managment::event::{
 };
 use crate::services::aws::cloudwatch_client::CloudWatchClient;
 use crate::widgets::WidgetExt;
-use crate::widgets::aws_service_navigator::NavigatorContent;
+use crate::widgets::service_navigator::NavigatorContent;
 use crate::widgets::popup::PopupContent;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{

@@ -13,7 +13,7 @@ use crate::{
     },
     widgets::{
         WidgetExt,
-        aws_service_navigator::{AWSServiceNavigator, NavigatorContent},
+        service_navigator::{AWSServiceNavigator, NavigatorContent},
         popup::{PopupWidget, PopupContent},
     },
 };

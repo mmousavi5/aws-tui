@@ -1,5 +1,5 @@
 // pub(crate) mod paragraph;
-pub(crate) mod aws_service_navigator;
+pub(crate) mod service_navigator;
 pub(crate) mod input_box;
 pub(crate) mod popup;
 // pub(crate) mod input_box;

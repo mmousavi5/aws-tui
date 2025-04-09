@@ -6,7 +6,7 @@ use crate::event_managment::event::{
 };
 use crate::services::aws::dynamo_client::DynamoDBClient;
 use crate::widgets::WidgetExt;
-use crate::widgets::aws_service_navigator::NavigatorContent;
+use crate::widgets::service_navigator::NavigatorContent;
 use crate::widgets::popup::PopupContent;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{buffer::Buffer, layout::Rect};

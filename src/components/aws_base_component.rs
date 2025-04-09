@@ -1,7 +1,7 @@
 use crate::components::ComponentFocus;
 use crate::event_managment::event::Event;
 use crate::widgets::WidgetExt;
-use crate::widgets::aws_service_navigator::{AWSServiceNavigator, NavigatorContent};
+use crate::widgets::service_navigator::{AWSServiceNavigator, NavigatorContent};
 use crate::widgets::input_box::InputBoxWidget;
 use crate::widgets::popup::{PopupWidget, PopupContent};
 use ratatui::{
