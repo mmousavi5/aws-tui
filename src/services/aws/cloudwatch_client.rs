@@ -133,11 +133,10 @@ impl CloudWatchClient {
         let mut next_token = None;
 
         // Parse the time range if provided
-        if let Some(range) = time_range {
-            let now = chrono::Utc::now();
-            let milliseconds = self.parse_time_range(range, now);
-            start_time = Some(milliseconds);
-        }
+        let effective_range = time_range.unwrap_or("1m");
+        let now = chrono::Utc::now();
+        let milliseconds = self.parse_time_range(effective_range, now);
+        start_time = Some(milliseconds);
 
         // Continue fetching pages until there are no more results
         loop {

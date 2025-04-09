@@ -14,7 +14,7 @@ use crate::{
     widgets::{
         WidgetExt,
         popup::{PopupContent, PopupWidget},
-        service_navigator::{AWSServiceNavigator, NavigatorContent},
+        service_navigator::{NavigatorContent, ServiceNavigator},
     },
 };
 use crossterm::event::{KeyCode, KeyEvent};
@@ -91,7 +91,7 @@ impl Tab {
         Self {
             name: name.to_string(),
             popup_mod: true,
-            left_widgets: Box::new(AWSServiceNavigator::new(
+            left_widgets: Box::new(ServiceNavigator::new(
                 WidgetType::AWSServiceNavigator,
                 false,
                 NavigatorContent::Services(WidgetEventType::VALUES.to_vec()),

@@ -19,7 +19,7 @@ pub enum NavigatorContent {
 
 /// Widget for navigating AWS services or records with filtering capabilities
 /// Handles navigation, selection, and filtering of items
-pub struct AWSServiceNavigator {
+pub struct ServiceNavigator {
     title: String,
     widget_type: WidgetType,
     content: NavigatorContent,          // Original unfiltered content
@@ -32,11 +32,11 @@ pub struct AWSServiceNavigator {
     filter_mode: bool,                  // Whether filter input mode is active
 }
 
-impl AWSServiceNavigator {
+impl ServiceNavigator {
     /// Creates a new navigator with the specified widget type, active state, and content
     pub fn new(widget_type: WidgetType, active: bool, content: NavigatorContent) -> Self {
         Self {
-            title: "AWS Services".to_string(),
+            title: "Services".to_string(),
             widget_type,
             content: content.clone(),
             filtered_content: content,
@@ -188,7 +188,7 @@ impl AWSServiceNavigator {
     }
 }
 
-impl WidgetExt for AWSServiceNavigator {
+impl WidgetExt for ServiceNavigator {
     /// Renders the navigator widget to the buffer
     fn render(&self, area: Rect, buf: &mut Buffer) {
         if !self.visible {

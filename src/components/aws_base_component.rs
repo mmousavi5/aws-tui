@@ -3,7 +3,7 @@ use crate::event_managment::event::{Event, InputBoxType};
 use crate::widgets::WidgetExt;
 use crate::widgets::input_box::InputBoxWidget;
 use crate::widgets::popup::{PopupContent, PopupWidget};
-use crate::widgets::service_navigator::{AWSServiceNavigator, NavigatorContent};
+use crate::widgets::service_navigator::{NavigatorContent, ServiceNavigator};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
@@ -12,11 +12,11 @@ use ratatui::{
 /// Base component providing common functionality for all AWS service components
 pub struct AWSComponentBase {
     /// Left navigator widget for service/bucket/table lists
-    pub navigator: AWSServiceNavigator,
+    pub navigator: ServiceNavigator,
     /// Input widget for search/filter/query commands
     pub input: InputBoxWidget,
     /// Results area displaying query results or service content
-    pub results_navigator: AWSServiceNavigator,
+    pub results_navigator: ServiceNavigator,
     /// Popup for displaying details and additional information
     pub details_popup: PopupWidget,
     /// Whether the component is currently active
@@ -42,13 +42,13 @@ impl AWSComponentBase {
         let popup_content = PopupContent::Profiles(vec!["No content".to_string()]);
 
         Self {
-            navigator: AWSServiceNavigator::new(
+            navigator: ServiceNavigator::new(
                 crate::event_managment::event::WidgetType::AWSServiceNavigator,
                 false,
                 navigator_content,
             ),
             input: InputBoxWidget::new(InputBoxType::Text, "Query Input", false),
-            results_navigator: AWSServiceNavigator::new(
+            results_navigator: ServiceNavigator::new(
                 crate::event_managment::event::WidgetType::QueryResultsNavigator,
                 false,
                 NavigatorContent::Records(vec![]),
