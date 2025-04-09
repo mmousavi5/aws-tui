@@ -82,7 +82,7 @@ impl CloudWatchClient {
     /// Parse a time range string (e.g., "15m", "1h", "7d") into milliseconds timestamp
     fn parse_time_range(&self, range: &str, now: chrono::DateTime<chrono::Utc>) -> i64 {
         // Default to 1 hour if parsing fails
-        let default_time = now.timestamp_millis() - (60 * 60 * 1000);
+        let default_time = now.timestamp_millis() - (60 * 1000);
 
         // Extract numeric value and unit from the time range string
         let mut numeric = String::new();
@@ -118,9 +118,9 @@ impl CloudWatchClient {
         }
     }
 
-    /// Retrieves log events from a specific log group
+    /// Retrieves log events from a specific log group with pagination
     ///
-    /// If filter_pattern is provided, uses FilterLogEvents API; otherwise uses GetLogEvents
+    /// This method fetches all pages of results by following the nextToken
     /// Returns formatted log entries with timestamps
     pub async fn list_log_events(
         &self,
@@ -129,6 +129,8 @@ impl CloudWatchClient {
         time_range: Option<&str>,
     ) -> Result<Vec<String>, aws_sdk_cloudwatchlogs::Error> {
         let mut start_time = None;
+        let mut logs = Vec::new();
+        let mut next_token = None;
 
         // Parse the time range if provided
         if let Some(range) = time_range {
@@ -137,27 +139,44 @@ impl CloudWatchClient {
             start_time = Some(milliseconds);
         }
 
-        // Build the filter log events request
-        let mut request = self
-            .client
-            .filter_log_events()
-            .log_group_name(log_group_name);
+        // Continue fetching pages until there are no more results
+        loop {
+            // Build the filter log events request
+            let mut request = self
+                .client
+                .filter_log_events()
+                .log_group_name(log_group_name);
 
-        if !filter_pattern.is_empty() {
-            request = request.filter_pattern(filter_pattern);
-        }
+            if !filter_pattern.is_empty() {
+                request = request.filter_pattern(filter_pattern);
+            }
 
-        if let Some(time) = start_time {
-            request = request.start_time(time);
-        }
+            if let Some(time) = start_time {
+                request = request.start_time(time);
+            }
 
-        // Execute the request and collect the results
-        let response = request.send().await?;
+            // Add the next token if we have one from a previous page
+            if let Some(token) = next_token {
+                request = request.next_token(token);
+            }
 
-        let mut logs = Vec::new();
-        for event in response.events() {
-            if let Some(message) = event.message() {
-                logs.push(message.to_string());
+            // Execute the request
+            let response = request.send().await?;
+
+            // Process log events from this page
+            let events = response.events();
+            for event in events {
+                if let Some(message) = event.message() {
+                    logs.push(message.to_string());
+                }
+            }
+
+            // Get the next token for pagination
+            next_token = response.next_token().map(String::from);
+
+            // Break the loop if there's no next token
+            if next_token.is_none() {
+                break;
             }
         }
 
