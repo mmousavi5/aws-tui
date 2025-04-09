@@ -5,6 +5,7 @@ use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Rect},
     style::{Color, Style},
+    text::{Line, Span, Text},
     widgets::{Block, BorderType, Borders, Paragraph, Widget},
 };
 use std::any::Any;
@@ -282,16 +283,22 @@ impl WidgetExt for ServiceNavigator {
         }
 
         // Generate content with scroll indicators and filtered items
-        let mut content_lines = Vec::new();
+        let mut lines: Vec<Line> = Vec::new();
 
         // Add filter help text at top if in filter mode
         if self.filter_mode {
-            content_lines.push("Type to filter, Esc to exit filter mode".to_string());
+            lines.push(Line::from(Span::styled(
+                "Type to filter, Esc to exit filter mode",
+                Style::default().fg(Color::White),
+            )));
         }
 
         // Add scroll up indicator if needed
         if self.scroll_offset > 0 {
-            content_lines.push("▲ Scroll up for more".to_string());
+            lines.push(Line::from(Span::styled(
+                "▲ Scroll up for more",
+                Style::default().fg(Color::White),
+            )));
         }
 
         // Calculate how many elements to show based on available height and scroll indicators
@@ -310,56 +317,84 @@ impl WidgetExt for ServiceNavigator {
         match &self.filtered_content {
             NavigatorContent::Services(services) => {
                 if services.is_empty() && !self.filter_text.is_empty() {
-                    content_lines.push("No matching services found".to_string());
+                    lines.push(Line::from(Span::styled(
+                        "No matching services found",
+                        Style::default().fg(Color::White),
+                    )));
                 } else {
-                    let visible_services = services
+                    for (i, service) in services
                         .iter()
                         .skip(self.scroll_offset)
                         .take(available_height)
                         .enumerate()
-                        .map(|(i, service)| {
-                            let actual_index = i + self.scroll_offset;
-                            if actual_index == self.selected_index {
-                                format!("> {}", service)
-                            } else {
-                                format!("  {}", service)
-                            }
-                        });
+                    {
+                        let actual_index = i + self.scroll_offset;
+                        let style = if actual_index == self.selected_index {
+                            Style::default()
+                                .fg(Color::Yellow)
+                                .add_modifier(ratatui::style::Modifier::BOLD)
+                        } else {
+                            Style::default().fg(Color::White)
+                        };
 
-                    content_lines.extend(visible_services);
+                        let prefix = if actual_index == self.selected_index {
+                            "> "
+                        } else {
+                            "  "
+                        };
+                        lines.push(Line::from(Span::styled(
+                            format!("{}{}", prefix, service),
+                            style,
+                        )));
+                    }
                 }
             }
             NavigatorContent::Records(records) => {
                 if records.is_empty() && !self.filter_text.is_empty() {
-                    content_lines.push("No matching records found".to_string());
+                    lines.push(Line::from(Span::styled(
+                        "No matching records found",
+                        Style::default().fg(Color::White),
+                    )));
                 } else {
-                    let visible_records = records
+                    for (i, record) in records
                         .iter()
                         .skip(self.scroll_offset)
                         .take(available_height)
                         .enumerate()
-                        .map(|(i, record)| {
-                            let actual_index = i + self.scroll_offset;
-                            if actual_index == self.selected_index {
-                                format!("> {}", record)
-                            } else {
-                                format!("  {}", record)
-                            }
-                        });
+                    {
+                        let actual_index = i + self.scroll_offset;
+                        let style = if actual_index == self.selected_index {
+                            Style::default()
+                                .fg(Color::Yellow)
+                                .add_modifier(ratatui::style::Modifier::BOLD)
+                        } else {
+                            Style::default().fg(Color::White)
+                        };
 
-                    content_lines.extend(visible_records);
+                        let prefix = if actual_index == self.selected_index {
+                            "> "
+                        } else {
+                            "  "
+                        };
+                        lines.push(Line::from(Span::styled(
+                            format!("{}{}", prefix, record),
+                            style,
+                        )));
+                    }
                 }
             }
         }
 
         // Add scroll down indicator if needed
         if self.scroll_offset + available_height < total_items {
-            content_lines.push("▼ Scroll down for more".to_string());
+            lines.push(Line::from(Span::styled(
+                "▼ Scroll down for more",
+                Style::default().fg(Color::White),
+            )));
         }
 
-        // Render the content
-        let content_text = content_lines.join("\n");
-        let paragraph = Paragraph::new(content_text).alignment(Alignment::Left);
+        // Render the content with styled text
+        let paragraph = Paragraph::new(Text::from(lines)).alignment(Alignment::Left);
         paragraph.render(text_area, buf);
     }
 
@@ -380,7 +415,6 @@ impl WidgetExt for ServiceNavigator {
                 }
                 KeyCode::Backspace => {
                     // Remove last character from filter
-                    self.remove_from_filter();
                     Some(WidgetAction::ServiceNavigatorEvent(
                         ServiceNavigatorEvent::Backspace,
                         self.widget_type.clone(),

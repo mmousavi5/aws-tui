@@ -86,10 +86,10 @@ impl App {
             KeyCode::Char('t') if key_event.modifiers == KeyModifiers::CONTROL => {
                 self.events.send(Event::App(AppEvent::CreateTab)) // ⌘+T for new tab
             }
-            KeyCode::Tab if key_event.modifiers == KeyModifiers::CONTROL => {
+            KeyCode::Char('l') if key_event.modifiers == KeyModifiers::CONTROL => {
                 self.events.send(Event::App(AppEvent::NextTab)) // ⌘+Tab to switch tabs
             }
-            KeyCode::Tab if key_event.modifiers == KeyModifiers::CONTROL | KeyModifiers::SHIFT => {
+            KeyCode::Char('j') if key_event.modifiers == KeyModifiers::CONTROL => {
                 self.events.send(Event::App(AppEvent::PreviousTab)) // ⌘+Shift+Tab to switch tabs backwards
             }
             KeyCode::Char('q') if key_event.modifiers == KeyModifiers::CONTROL => {
@@ -110,6 +110,7 @@ impl App {
     pub fn apply_app_state(&mut self, app_state: AppEvent) {
         match app_state {
             AppEvent::NextTab => self.next_tab(),
+            AppEvent::PreviousTab => self.previous_tab(),
             AppEvent::CreateTab => {
                 self.tabs.push(Tab::new(
                     "New Tab",
@@ -155,5 +156,13 @@ impl App {
     pub fn next_tab(&mut self) {
         // self.tabs[self.active_tab].show_popup = false;
         self.active_tab = (self.active_tab + 1) % self.tabs.len();
+    }
+    pub fn previous_tab(&mut self) {
+        // self.tabs[self.active_tab].show_popup = false;
+        if self.active_tab == 0 {
+            self.active_tab = self.tabs.len() - 1;
+        } else {
+            self.active_tab -= 1;
+        }
     }
 }

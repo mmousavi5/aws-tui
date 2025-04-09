@@ -128,7 +128,6 @@ impl CloudWatchClient {
         filter_pattern: &str,
         time_range: Option<&str>,
     ) -> Result<Vec<String>, aws_sdk_cloudwatchlogs::Error> {
-        let mut start_time = None;
         let mut logs = Vec::new();
         let mut next_token = None;
 
@@ -136,7 +135,6 @@ impl CloudWatchClient {
         let effective_range = time_range.unwrap_or("1m");
         let now = chrono::Utc::now();
         let milliseconds = self.parse_time_range(effective_range, now);
-        start_time = Some(milliseconds);
 
         // Continue fetching pages until there are no more results
         loop {
@@ -150,9 +148,7 @@ impl CloudWatchClient {
                 request = request.filter_pattern(filter_pattern);
             }
 
-            if let Some(time) = start_time {
-                request = request.start_time(time);
-            }
+            request = request.start_time(milliseconds);
 
             // Add the next token if we have one from a previous page
             if let Some(token) = next_token {
