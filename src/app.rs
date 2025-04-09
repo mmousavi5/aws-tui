@@ -125,7 +125,6 @@ impl App {
                 }
             }
             AppEvent::Quit => self.quit(),
-            _ => {}
         }
     }
 

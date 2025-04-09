@@ -447,6 +447,11 @@ impl Tab {
             // Always add global shortcuts if not in popup mode
             if !self.popup_mod {
                 help_items.push(("Tab".to_string(), "Switch focus".to_string()));
+                help_items.push(("⌘+T".to_string(), "New tab".to_string()));
+                help_items.push(("⌘+W".to_string(), "Close tab".to_string()));
+                help_items.push(("⌘+L".to_string(), "Next tab".to_string()));
+                help_items.push(("⌘+J".to_string(), "Previous tab".to_string()));
+                help_items.push(("⌘+Q".to_string(), "Quit".to_string()));
             }
         }
 
