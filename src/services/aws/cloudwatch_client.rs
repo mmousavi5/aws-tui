@@ -1,5 +1,5 @@
 //! CloudWatch Logs client module
-//! 
+//!
 //! Provides functionality to interact with AWS CloudWatch Logs service,
 //! including listing log groups and retrieving log events with optional filtering.
 
@@ -79,6 +79,45 @@ impl CloudWatchClient {
         }
     }
 
+    /// Parse a time range string (e.g., "15m", "1h", "7d") into milliseconds timestamp
+    fn parse_time_range(&self, range: &str, now: chrono::DateTime<chrono::Utc>) -> i64 {
+        // Default to 1 hour if parsing fails
+        let default_time = now.timestamp_millis() - (60 * 60 * 1000);
+
+        // Extract numeric value and unit from the time range string
+        let mut numeric = String::new();
+        let mut unit = String::new();
+
+        for c in range.chars() {
+            if c.is_digit(10) {
+                numeric.push(c);
+            } else {
+                unit.push(c);
+            }
+        }
+
+        // Parse the numeric part
+        let amount: i64 = match numeric.parse() {
+            Ok(num) => num,
+            Err(_) => return default_time,
+        };
+
+        // If amount is 0 or negative, return default
+        if amount <= 0 {
+            return default_time;
+        }
+
+        // Calculate milliseconds based on the unit
+        match unit.as_str() {
+            "s" => now.timestamp_millis() - (amount * 1000), // seconds
+            "m" => now.timestamp_millis() - (amount * 60 * 1000), // minutes
+            "h" => now.timestamp_millis() - (amount * 60 * 60 * 1000), // hours
+            "d" => now.timestamp_millis() - (amount * 24 * 60 * 60 * 1000), // days
+            "w" => now.timestamp_millis() - (amount * 7 * 24 * 60 * 60 * 1000), // weeks
+            _ => default_time,                               // Unrecognized unit, return default
+        }
+    }
+
     /// Retrieves log events from a specific log group
     ///
     /// If filter_pattern is provided, uses FilterLogEvents API; otherwise uses GetLogEvents
@@ -87,78 +126,58 @@ impl CloudWatchClient {
         &self,
         log_group_name: &str,
         filter_pattern: &str,
-    ) -> Result<Vec<String>, CloudWatchClientError> {
+        time_range: Option<&str>,
+    ) -> Result<Vec<String>, aws_sdk_cloudwatchlogs::Error> {
+        let mut start_time = None;
+
+        // Parse the time range if provided
+        if let Some(range) = time_range {
+            let now = chrono::Utc::now();
+            let milliseconds = self.parse_time_range(range, now);
+            start_time = Some(milliseconds);
+        }
+
+        // Build the filter log events request
+        let mut request = self
+            .client
+            .filter_log_events()
+            .log_group_name(log_group_name);
+
         if !filter_pattern.is_empty() {
-            // With filter pattern: use FilterLogEvents for more advanced searching
-            let resp = self
-                .client
-                .filter_log_events()
-                .log_group_name(log_group_name)
-                .filter_pattern(filter_pattern)
-                .limit(100)  // Limit results to prevent overwhelming the UI
-                .send()
-                .await?;
+            request = request.filter_pattern(filter_pattern);
+        }
 
-            let events = resp
-                .events()
-                .iter()
-                .map(|event| {
-                    // Format timestamp as readable date/time
-                    let timestamp = event
-                        .timestamp()
-                        .map(|ts| {
-                            chrono::DateTime::from_timestamp_millis(ts as i64)
-                                .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-                                .unwrap_or_default()
-                        })
-                        .unwrap_or_default();
+        if let Some(time) = start_time {
+            request = request.start_time(time);
+        }
 
-                    let message = event.message().unwrap_or_default();
+        // Execute the request and collect the results
+        let response = request.send().await?;
 
-                    format!("[{}] {}", timestamp, message)
-                })
-                .collect::<Vec<_>>();
-
-            if events.is_empty() {
-                Ok(vec!["No matching logs found".to_string()])
-            } else {
-                Ok(events)
-            }
-        } else {
-            // Without filter: use GetLogEvents for simpler listing
-            let resp = self
-                .client
-                .get_log_events()
-                .log_group_name(log_group_name)
-                .limit(100)  // Limit results to prevent overwhelming the UI
-                .send()
-                .await?;
-
-            let events = resp
-                .events()
-                .iter()
-                .map(|event| {
-                    // Format timestamp as readable date/time
-                    let timestamp = event
-                        .timestamp()
-                        .map(|ts| {
-                            chrono::DateTime::from_timestamp_millis(ts as i64)
-                                .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-                                .unwrap_or_default()
-                        })
-                        .unwrap_or_default();
-
-                    let message = event.message().unwrap_or_default();
-
-                    format!("[{}] {}", timestamp, message)
-                })
-                .collect::<Vec<_>>();
-
-            if events.is_empty() {
-                Ok(vec!["No log events found".to_string()])
-            } else {
-                Ok(events)
+        let mut logs = Vec::new();
+        for event in response.events() {
+            if let Some(message) = event.message() {
+                logs.push(message.to_string());
             }
         }
+
+        // Add helpful message when no logs found
+        if logs.is_empty() {
+            if !filter_pattern.is_empty() {
+                logs.push(format!(
+                    "No logs matching filter '{}' found in the time range",
+                    filter_pattern
+                ));
+            } else if let Some(range) = time_range {
+                logs.push(format!(
+                    "No logs found in the specified time range ({})",
+                    range
+                ));
+            } else {
+                logs.push("No logs found".to_string());
+            }
+        }
+
+        Ok(logs)
     }
 }

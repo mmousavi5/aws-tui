@@ -44,6 +44,7 @@ pub enum CloudWatchComponentActions {
     SearchLogs(String),
     ViewLogDetails(String),
     PopupDetails(String),
+    SetTimeRange(String),
     NextFocus,
     PreviousFocus,
     WidgetAction(WidgetAction),
@@ -76,12 +77,16 @@ pub enum DynamoDBComponentActions {
     PopupDetails(String),
     WidgetActions(WidgetAction),
 }
-
+#[derive(Clone)]
+pub enum InputBoxType {
+    Text,
+    TimeRange,
+}
 /// Actions that can be performed on widgets
 #[derive(Clone)]
 pub enum WidgetAction {
     ServiceNavigatorEvent(ServiceNavigatorEvent, WidgetType),
-    InputBoxEvent(InputBoxEvent),
+    InputBoxEvent(InputBoxEvent, InputBoxType),
     ParagraphEvent(ParagraphEvent),
     ToggleFocusState,
     PopupAction(PopupAction),
@@ -111,8 +116,11 @@ pub enum PopupAction {
 #[derive(Clone)]
 pub enum ServiceNavigatorEvent {
     ItemSelected(WidgetEventType),
+    FilterTextChanged(String),
     ArrowUp,
     ArrowDown,
+    Backspace,
+    Delete,
     PageDown,
     PageUp,
     Home,
@@ -215,7 +223,7 @@ impl EventHandler {
     }
 
     /// Waits for and returns the next event from the channel
-    /// 
+    ///
     /// Returns an error if the event source disconnects
     pub async fn next(&mut self) -> color_eyre::Result<Event> {
         self.receiver
@@ -225,7 +233,7 @@ impl EventHandler {
     }
 
     /// Queues an event to be processed in the next iteration of the event loop
-    /// 
+    ///
     /// Useful for internal event generation within the application
     pub fn send(&mut self, event: Event) {
         // Ignore the result as the receiver cannot be dropped while this struct exists
@@ -277,7 +285,7 @@ impl EventTask {
     }
 
     /// Sends an event to the receiver.
-    /// 
+    ///
     /// This is internal to the event task and should not be confused with
     /// the public EventHandler::send method.
     fn send(&self, event: Event) {

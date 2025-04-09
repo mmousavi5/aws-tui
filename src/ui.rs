@@ -21,7 +21,7 @@ impl Widget for &App {
             .iter()
             .map(|t| t.name.to_string())
             .collect::<Vec<String>>();
-            
+
         // Render the currently active tab with the full area
         if let Some(active_tab) = self.tabs.get(self.active_tab) {
             active_tab.render(area, buf, all_tabs_names, self.active_tab);

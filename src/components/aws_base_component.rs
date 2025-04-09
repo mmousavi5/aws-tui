@@ -1,9 +1,9 @@
 use crate::components::ComponentFocus;
-use crate::event_managment::event::Event;
+use crate::event_managment::event::{Event, InputBoxType};
 use crate::widgets::WidgetExt;
-use crate::widgets::service_navigator::{AWSServiceNavigator, NavigatorContent};
 use crate::widgets::input_box::InputBoxWidget;
-use crate::widgets::popup::{PopupWidget, PopupContent};
+use crate::widgets::popup::{PopupContent, PopupWidget};
+use crate::widgets::service_navigator::{AWSServiceNavigator, NavigatorContent};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
@@ -47,7 +47,7 @@ impl AWSComponentBase {
                 false,
                 navigator_content,
             ),
-            input: InputBoxWidget::new("Query Input", false),
+            input: InputBoxWidget::new(InputBoxType::Text, "Query Input", false),
             results_navigator: AWSServiceNavigator::new(
                 crate::event_managment::event::WidgetType::QueryResultsNavigator,
                 false,
@@ -112,8 +112,9 @@ impl AWSComponentBase {
         self.current_focus = match self.current_focus {
             ComponentFocus::Navigation => ComponentFocus::None,
             ComponentFocus::Input => ComponentFocus::Navigation,
-            ComponentFocus::Results => ComponentFocus::Input,
-            ComponentFocus::None => ComponentFocus::None,
+            ComponentFocus::TimeRange => ComponentFocus::Input,
+            ComponentFocus::Results => ComponentFocus::TimeRange,
+            ComponentFocus::None => ComponentFocus::Results,
         };
         self.current_focus
     }
@@ -122,7 +123,8 @@ impl AWSComponentBase {
     pub fn focus_next(&mut self) -> ComponentFocus {
         self.current_focus = match self.current_focus {
             ComponentFocus::Navigation => ComponentFocus::Input,
-            ComponentFocus::Input => ComponentFocus::Results,
+            ComponentFocus::Input => ComponentFocus::TimeRange,
+            ComponentFocus::TimeRange => ComponentFocus::Results,
             ComponentFocus::Results => ComponentFocus::None,
             ComponentFocus::None => ComponentFocus::Navigation,
         };

@@ -1,13 +1,13 @@
 use crate::components::aws_base_component::AWSComponentBase;
 use crate::components::{AWSComponent, ComponentFocus};
 use crate::event_managment::event::{
-    ServiceNavigatorEvent, ComponentActions, DynamoDBComponentActions, Event, InputBoxEvent,
+    ComponentActions, DynamoDBComponentActions, Event, InputBoxEvent, ServiceNavigatorEvent,
     TabEvent, WidgetAction, WidgetEventType, WidgetType,
 };
 use crate::services::aws::dynamo_client::DynamoDBClient;
 use crate::widgets::WidgetExt;
-use crate::widgets::service_navigator::NavigatorContent;
 use crate::widgets::popup::PopupContent;
+use crate::widgets::service_navigator::NavigatorContent;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{buffer::Buffer, layout::Rect};
 use std::any::Any;
@@ -113,6 +113,7 @@ impl AWSComponent for DynamoDB {
                     ComponentFocus::Input => self.base.input.handle_input(key_event),
                     ComponentFocus::Results => self.base.results_navigator.handle_input(key_event),
                     ComponentFocus::None => None,
+                    _ => None,
                 } {
                     self.base
                         .event_sender
@@ -241,11 +242,11 @@ impl AWSComponent for DynamoDB {
                     }
                 }
                 // Process input box events
-                WidgetAction::InputBoxEvent(ref _input_box_event) => {
+                WidgetAction::InputBoxEvent(ref _input_box_event, _) => {
                     if let Some(signal) = self.base.input.process_event(widget_action) {
                         match signal {
                             // Handle when user submits a query in the input box
-                            WidgetAction::InputBoxEvent(InputBoxEvent::Written(content)) => {
+                            WidgetAction::InputBoxEvent(InputBoxEvent::Written(content), _) => {
                                 self.base
                                     .event_sender
                                     .send(Event::Tab(TabEvent::ComponentActions(

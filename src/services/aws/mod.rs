@@ -1,5 +1,5 @@
 //! AWS Services Module
-//! 
+//!
 //! Contains client implementations for various AWS services used in the TUI application.
 //! Provides unified error handling and client management.
 
@@ -27,11 +27,11 @@ pub enum ClientError {
     /// Errors from DynamoDB operations
     #[error("AWS DynamoDBSDK error: {0}")]
     AWSDynamoDBError(#[from] DynamoDBClientError),
-    
+
     /// Errors from S3 operations
     #[error("AWS S3SDK error: {0}")]
     AWSS3Error(#[from] S3ClientError),
-    
+
     /// Errors from CloudWatch operations
     #[error("AWS CloudWatch error: {0}")]
     AWSCloudWatchError(#[from] CloudWatchClientError),

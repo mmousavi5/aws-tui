@@ -55,17 +55,17 @@ impl PopupContent {
 /// Widget for displaying popup dialogs with different content types
 #[derive(Debug)]
 pub struct PopupWidget {
-    content: PopupContent,        // Content displayed in the popup
-    title: String,                // Title displayed in the popup border
+    content: PopupContent,         // Content displayed in the popup
+    title: String,                 // Title displayed in the popup border
     selected_item: Option<String>, // Currently selected item (if applicable)
-    selection_index: usize,       // Index of currently selected item (for lists)
-    active: bool,                 // Whether popup has input focus
-    visible: bool,                // Whether popup is currently displayed
+    selection_index: usize,        // Index of currently selected item (for lists)
+    active: bool,                  // Whether popup has input focus
+    visible: bool,                 // Whether popup is currently displayed
 }
 
 impl PopupWidget {
     /// Creates a new popup widget with optional initial visibility and active state
-    pub fn new(content:PopupContent, title: &str, visible: bool, active: bool) -> Self {
+    pub fn new(content: PopupContent, title: &str, visible: bool, active: bool) -> Self {
         // Load AWS profiles by default
 
         Self {
@@ -77,12 +77,12 @@ impl PopupWidget {
             visible,
         }
     }
-    
+
     /// Updates the content of the popup
     pub fn set_content(&mut self, content: PopupContent) {
         self.content = content;
     }
-    
+
     /// Calculates the area for the popup based on parent area and content type
     fn calculate_popup_area(&self, area: Rect) -> Option<Rect> {
         if area.width <= MIN_POPUP_WIDTH || area.height <= MIN_POPUP_HEIGHT {
@@ -247,12 +247,12 @@ impl WidgetExt for PopupWidget {
     fn set_visible(&mut self, visible: bool) {
         self.visible = visible;
     }
-    
+
     /// Returns self as Any for downcasting
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
-    
+
     /// Processes popup events and updates state accordingly
     fn process_event(&mut self, event: WidgetAction) -> Option<WidgetAction> {
         match event {
@@ -311,7 +311,7 @@ impl WidgetExt for PopupWidget {
     fn is_active(&self) -> bool {
         self.active
     }
-    
+
     /// Updates the popup's title
     fn set_title(&mut self, title: String) {
         self.title = title;

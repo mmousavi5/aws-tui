@@ -1,13 +1,14 @@
 use crate::components::aws_base_component::AWSComponentBase;
 use crate::components::{AWSComponent, ComponentFocus};
 use crate::event_managment::event::{
-    ServiceNavigatorEvent, CloudWatchComponentActions, ComponentActions, Event, InputBoxEvent,
-    TabEvent, WidgetAction, WidgetEventType, WidgetType,
+    CloudWatchComponentActions, ComponentActions, Event, InputBoxEvent, InputBoxType,
+    ServiceNavigatorEvent, TabEvent, WidgetAction, WidgetEventType, WidgetType,
 };
 use crate::services::aws::cloudwatch_client::CloudWatchClient;
 use crate::widgets::WidgetExt;
-use crate::widgets::service_navigator::NavigatorContent;
+use crate::widgets::input_box::InputBoxWidget;
 use crate::widgets::popup::PopupContent;
+use crate::widgets::service_navigator::NavigatorContent;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     buffer::Buffer,
@@ -25,6 +26,10 @@ pub struct CloudWatch {
     cloudwatch_client: Option<Arc<Mutex<CloudWatchClient>>>,
     /// Currently selected CloudWatch log group
     selected_log_group: Option<String>,
+    /// Input box for time range filtering
+    time_range_input: InputBoxWidget,
+    /// Current time range value
+    time_range: Option<String>,
 }
 
 impl CloudWatch {
@@ -34,6 +39,12 @@ impl CloudWatch {
             base: AWSComponentBase::new(event_sender.clone(), NavigatorContent::Records(vec![])),
             cloudwatch_client: None,
             selected_log_group: None,
+            time_range_input: InputBoxWidget::new(
+                InputBoxType::TimeRange,
+                "Time Range (e.g. 1h, 1d, 7d)",
+                false,
+            ),
+            time_range: None,
         }
     }
 
@@ -53,7 +64,7 @@ impl CloudWatch {
             let logs = client
                 .lock()
                 .await
-                .list_log_events(&log_group, "")
+                .list_log_events(&log_group, "", self.time_range.as_deref())
                 .await
                 .unwrap_or_else(|_| vec!["No log events found".to_string()]);
 
@@ -72,7 +83,7 @@ impl CloudWatch {
             let logs = client
                 .lock()
                 .await
-                .list_log_events(log_group, filter_pattern)
+                .list_log_events(log_group, filter_pattern, self.time_range.as_deref())
                 .await
                 .unwrap_or_else(|_| vec!["No matching logs found".to_string()]);
 
@@ -82,6 +93,17 @@ impl CloudWatch {
             self.base
                 .results_navigator
                 .set_content(NavigatorContent::Records(logs));
+        }
+    }
+
+    /// Sets the time range and refreshes the current view
+    async fn set_time_range(&mut self, time_range: String) {
+        self.time_range = Some(time_range);
+
+        // If a log group is selected, refresh the logs with the new time range
+        if let Some(log_group) = self.selected_log_group.clone() {
+            let filter = self.base.input.get_content().unwrap_or_default();
+            self.search_logs(&log_group, &filter).await;
         }
     }
 
@@ -115,18 +137,19 @@ impl AWSComponent for CloudWatch {
         let right_vertical_split = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Percentage(20), // Log events list
-                Constraint::Percentage(80), // Search/filter input
+                Constraint::Percentage(10), // Search filter input
+                Constraint::Percentage(10), // Time range input
+                Constraint::Percentage(80), // Log events results
             ])
             .split(horizontal_split[1]);
 
         // Render components
         self.base.navigator.render(horizontal_split[0], buf);
         self.base.input.render(right_vertical_split[0], buf);
-
+        self.time_range_input.render(right_vertical_split[1], buf);
         self.base
             .results_navigator
-            .render(right_vertical_split[1], buf);
+            .render(right_vertical_split[2], buf);
 
         if self.base.details_popup.is_visible() {
             self.base.details_popup.render(area, buf);
@@ -177,17 +200,25 @@ impl AWSComponent for CloudWatch {
                 self.base.update_widget_states();
             }
             KeyCode::Char('2') if key_event.modifiers == KeyModifiers::ALT => {
-                self.base.current_focus = ComponentFocus::Results;
+                self.base.current_focus = ComponentFocus::Input;
                 self.base.update_widget_states();
             }
             KeyCode::Char('3') if key_event.modifiers == KeyModifiers::ALT => {
-                self.base.current_focus = ComponentFocus::Input;
+                self.base.current_focus = ComponentFocus::TimeRange; // New focus enum value
+                self.time_range_input.set_active(true);
+                self.base.input.set_active(false);
+                self.base.navigator.set_active(false);
+                self.base.results_navigator.set_active(false);
+            }
+            KeyCode::Char('4') if key_event.modifiers == KeyModifiers::ALT => {
+                self.base.current_focus = ComponentFocus::Results;
                 self.base.update_widget_states();
             }
             KeyCode::Esc => {
                 if self.base.current_focus != ComponentFocus::Navigation {
                     self.base.current_focus = ComponentFocus::Navigation;
                     self.base.update_widget_states();
+                    self.time_range_input.set_active(false);
                 }
             }
             _ => {
@@ -195,6 +226,7 @@ impl AWSComponent for CloudWatch {
                 if let Some(signal) = match self.base.current_focus {
                     ComponentFocus::Navigation => self.base.navigator.handle_input(key_event),
                     ComponentFocus::Input => self.base.input.handle_input(key_event),
+                    ComponentFocus::TimeRange => self.time_range_input.handle_input(key_event),
                     ComponentFocus::Results => self.base.results_navigator.handle_input(key_event),
                     ComponentFocus::None => None,
                 } {
@@ -226,19 +258,61 @@ impl AWSComponent for CloudWatch {
                         self.search_logs(&log_group_clone, &filter).await;
                     }
                 }
+                // Handle time range setting
+                CloudWatchComponentActions::SetTimeRange(time_range) => {
+                    self.set_time_range(time_range).await;
+                }
                 // Display detailed view of a log entry
                 CloudWatchComponentActions::ViewLogDetails(log_content) => {
                     self.view_log_details(&log_content).await;
                 }
                 // Cycle focus forward through widgets
                 CloudWatchComponentActions::NextFocus => {
-                    self.base.focus_next();
-                    self.base.update_widget_states();
+                    // If we're on TimeRange focus, we need special handling
+                    if self.base.current_focus == ComponentFocus::TimeRange {
+                        self.time_range_input.set_active(false);
+                        self.base.current_focus = ComponentFocus::Results;
+                        self.base.update_widget_states();
+                    } else {
+                        let prev_focus = self.base.current_focus;
+                        self.base.focus_next();
+
+                        // If we just moved to TimeRange, activate time range input
+                        if prev_focus != ComponentFocus::TimeRange
+                            && self.base.current_focus == ComponentFocus::TimeRange
+                        {
+                            self.time_range_input.set_active(true);
+                            self.base.input.set_active(false);
+                            self.base.navigator.set_active(false);
+                            self.base.results_navigator.set_active(false);
+                        } else {
+                            self.base.update_widget_states();
+                        }
+                    }
                 }
                 // Cycle focus backward through widgets
                 CloudWatchComponentActions::PreviousFocus => {
-                    self.base.focus_previous();
-                    self.base.update_widget_states();
+                    // If we're on TimeRange focus, we need special handling
+                    if self.base.current_focus == ComponentFocus::TimeRange {
+                        self.time_range_input.set_active(false);
+                        self.base.current_focus = ComponentFocus::Input;
+                        self.base.update_widget_states();
+                    } else {
+                        let prev_focus = self.base.current_focus;
+                        self.base.focus_previous();
+
+                        // If we just moved to TimeRange, activate time range input
+                        if prev_focus != ComponentFocus::TimeRange
+                            && self.base.current_focus == ComponentFocus::TimeRange
+                        {
+                            self.time_range_input.set_active(true);
+                            self.base.input.set_active(false);
+                            self.base.navigator.set_active(false);
+                            self.base.results_navigator.set_active(false);
+                        } else {
+                            self.base.update_widget_states();
+                        }
+                    }
                 }
                 // Show details in popup window
                 CloudWatchComponentActions::PopupDetails(details) => {
@@ -250,10 +324,7 @@ impl AWSComponent for CloudWatch {
                 }
                 // Process events from child widgets
                 CloudWatchComponentActions::WidgetAction(widget_action) => match widget_action {
-                    WidgetAction::ServiceNavigatorEvent(
-                        ref _aws_navigator_event,
-                        widget_type,
-                    ) => {
+                    WidgetAction::ServiceNavigatorEvent(ref _aws_navigator_event, widget_type) => {
                         if widget_type == WidgetType::AWSServiceNavigator {
                             if let Some(signal) =
                                 self.base.navigator.process_event(widget_action.clone())
@@ -311,21 +382,57 @@ impl AWSComponent for CloudWatch {
                             }
                         }
                     }
-                    WidgetAction::InputBoxEvent(ref _input_box_event) => {
-                        if let Some(signal) = self.base.input.process_event(widget_action) {
-                            if let WidgetAction::InputBoxEvent(InputBoxEvent::Written(content)) =
-                                signal
-                            {
-                                // Use input content to filter logs
-                                if let Some(_) = &self.selected_log_group {
-                                    self.base
-                                        .event_sender
-                                        .send(Event::Tab(TabEvent::ComponentActions(
-                                            ComponentActions::CloudWatchComponentActions(
-                                                CloudWatchComponentActions::SearchLogs(content),
-                                            ),
-                                        )))
-                                        .unwrap();
+                    WidgetAction::InputBoxEvent(ref _input_box_event, ref input_type) => {
+                        // Check if it's from search filter input
+                        match input_type {
+                            InputBoxType::Text => {
+                                if let Some(signal) =
+                                    self.base.input.process_event(widget_action.clone())
+                                {
+                                    if let WidgetAction::InputBoxEvent(
+                                        InputBoxEvent::Written(content),
+                                        _,
+                                    ) = signal
+                                    {
+                                        // Use input content to filter logs
+                                        if let Some(_) = &self.selected_log_group {
+                                            self.base
+                                                .event_sender
+                                                .send(Event::Tab(TabEvent::ComponentActions(
+                                                    ComponentActions::CloudWatchComponentActions(
+                                                        CloudWatchComponentActions::SearchLogs(
+                                                            content,
+                                                        ),
+                                                    ),
+                                                )))
+                                                .unwrap();
+                                        }
+                                    }
+                                }
+                            }
+                            // Check if it's from time range input
+                            InputBoxType::TimeRange => {
+                                // Check if it's from time range input
+                                if let Some(signal) =
+                                    self.time_range_input.process_event(widget_action.clone())
+                                {
+                                    if let WidgetAction::InputBoxEvent(
+                                        InputBoxEvent::Written(content),
+                                        _,
+                                    ) = signal
+                                    {
+                                        // Set the time range and refresh logs
+                                        self.base
+                                            .event_sender
+                                            .send(Event::Tab(TabEvent::ComponentActions(
+                                                ComponentActions::CloudWatchComponentActions(
+                                                    CloudWatchComponentActions::SetTimeRange(
+                                                        content,
+                                                    ),
+                                                ),
+                                            )))
+                                            .unwrap();
+                                    }
                                 }
                             }
                         }
@@ -345,6 +452,7 @@ impl AWSComponent for CloudWatch {
     /// Sets the active state of this component
     fn set_active(&mut self, active: bool) {
         self.base.active = active;
+        self.time_range_input.set_active(false); // Always reset time range input active state
         self.base.update_widget_states();
     }
 
@@ -388,6 +496,7 @@ impl AWSComponent for CloudWatch {
     /// Resets focus to the navigation pane
     fn reset_focus(&mut self) {
         self.base.current_focus = ComponentFocus::Navigation;
+        self.time_range_input.set_active(false);
         self.base.update_widget_states();
     }
 
@@ -398,11 +507,34 @@ impl AWSComponent for CloudWatch {
     /// Restores focus to the last active widget
     fn set_focus_to_last(&mut self) {
         self.base.set_focus_to_last();
-        self.base.update_widget_states();
+
+        // Special handling for TimeRange focus
+        if self.base.current_focus == ComponentFocus::TimeRange {
+            self.time_range_input.set_active(true);
+            self.base.input.set_active(false);
+            self.base.navigator.set_active(false);
+            self.base.results_navigator.set_active(false);
+        } else {
+            self.base.update_widget_states();
+        }
     }
 
     fn get_help_items(&self) -> Vec<(String, String)> {
-        // Return help items based on the base component's state
-        self.base.get_help_items()
+        let mut help_items = vec![];
+
+        // Add time range specific help when time range input is focused
+        if self.base.current_focus == ComponentFocus::TimeRange {
+            help_items.push(("Enter".to_string(), "Apply time range".to_string()));
+            help_items.push(("Time formats".to_string(), "15m, 1h, 1d, 7d".to_string()));
+            help_items.push(("Esc".to_string(), "Return to navigation".to_string()));
+        } else {
+            // Return default help items based on the base component's state
+            help_items = self.base.get_help_items();
+
+            // Add time range navigation helper
+            help_items.push(("Alt+3".to_string(), "Time range".to_string()));
+        }
+
+        help_items
     }
 }

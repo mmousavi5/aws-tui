@@ -46,7 +46,7 @@ pub trait AWSComponent: Send {
 
     /// Restore focus to the last active widget
     fn set_focus_to_last(&mut self);
-    
+
     /// Get contextual help information for the component
     fn get_help_items(&self) -> Vec<(String, String)>;
 }
@@ -58,6 +58,8 @@ pub enum ComponentFocus {
     Navigation,
     /// Focus on the input area (search/filter/command box)
     Input,
+    /// Focus on the time range input box
+    TimeRange,
     /// Focus on the results display area
     Results,
     /// No focus set

@@ -1,8 +1,5 @@
 use crate::event_managment::event::{WidgetAction, WidgetEventType, WidgetType};
-use crate::{
-    event_managment::event::{ServiceNavigatorEvent, InputBoxEvent},
-    widgets::WidgetExt,
-};
+use crate::{event_managment::event::ServiceNavigatorEvent, widgets::WidgetExt};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     buffer::Buffer,
@@ -79,9 +76,9 @@ impl AWSServiceNavigator {
                 if self.selected_index < records.len() {
                     records.get(self.selected_index).map(|record| {
                         WidgetAction::ServiceNavigatorEvent(
-                            ServiceNavigatorEvent::ItemSelected(
-                                WidgetEventType::RecordSelected(record.clone()),
-                            ),
+                            ServiceNavigatorEvent::ItemSelected(WidgetEventType::RecordSelected(
+                                record.clone(),
+                            )),
                             self.widget_type,
                         )
                     })
@@ -220,12 +217,34 @@ impl WidgetExt for AWSServiceNavigator {
             .border_type(BorderType::Double)
             .border_style(border_style);
 
-        // Create inner block for content area
+        // Get item count information
+        let total_items = self.content_len();
+        let original_total = match &self.content {
+            NavigatorContent::Services(services) => services.len(),
+            NavigatorContent::Records(records) => records.len(),
+        };
+
+        // Create inner title with item count
+        let inner_title = match &self.content {
+            NavigatorContent::Services(_) => {
+                if self.filter_text.is_empty() {
+                    format!("Available Services ({})", total_items)
+                } else {
+                    format!("Available Services ({}/{})", total_items, original_total)
+                }
+            }
+            NavigatorContent::Records(_) => {
+                if self.filter_text.is_empty() {
+                    format!("Available Records ({})", total_items)
+                } else {
+                    format!("Available Records ({}/{})", total_items, original_total)
+                }
+            }
+        };
+
+        // Create inner block for content area with count information
         let inner_block = Block::default()
-            .title(match &self.content {
-                NavigatorContent::Services(_) => "Available Services",
-                NavigatorContent::Records(_) => "Available Records",
-            })
+            .title(inner_title)
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(Color::White));
@@ -235,7 +254,6 @@ impl WidgetExt for AWSServiceNavigator {
         // Calculate inner area for content
         let inner_area = Rect::new(area.x + 2, area.y + 2, area.width - 4, area.height - 4);
         inner_block.render(inner_area, buf);
-
         // Text content area with padding
         let text_area = Rect::new(
             inner_area.x + 2,
@@ -355,19 +373,26 @@ impl WidgetExt for AWSServiceNavigator {
                     if !key_event.modifiers.contains(KeyModifiers::CONTROL) {
                         self.add_to_filter(c);
                     }
-                    Some(WidgetAction::InputBoxEvent(InputBoxEvent::Written(
-                        self.filter_text.clone(),
-                    )))
+                    Some(WidgetAction::ServiceNavigatorEvent(
+                        ServiceNavigatorEvent::FilterTextChanged(self.filter_text.clone()),
+                        self.widget_type.clone(),
+                    ))
                 }
                 KeyCode::Backspace => {
                     // Remove last character from filter
                     self.remove_from_filter();
-                    Some(WidgetAction::InputBoxEvent(InputBoxEvent::Backspace))
+                    Some(WidgetAction::ServiceNavigatorEvent(
+                        ServiceNavigatorEvent::Backspace,
+                        self.widget_type.clone(),
+                    ))
                 }
                 KeyCode::Delete => {
                     // Also remove character
                     self.remove_from_filter();
-                    Some(WidgetAction::InputBoxEvent(InputBoxEvent::Delete))
+                    Some(WidgetAction::ServiceNavigatorEvent(
+                        ServiceNavigatorEvent::Delete,
+                        self.widget_type.clone(),
+                    ))
                 }
                 KeyCode::Esc => {
                     // Exit filter mode but keep the current filter
@@ -532,16 +557,13 @@ impl WidgetExt for AWSServiceNavigator {
                     }
                     None
                 }
-                _ => None,
-            },
-            WidgetAction::InputBoxEvent(input_event) => match input_event {
-                InputBoxEvent::Written(text) => {
+                ServiceNavigatorEvent::FilterTextChanged(text) => {
                     if self.filter_mode {
                         self.apply_filter(&text);
                     }
                     None
                 }
-                InputBoxEvent::Backspace | InputBoxEvent::Delete => {
+                ServiceNavigatorEvent::Backspace => {
                     if self.filter_mode {
                         self.remove_from_filter();
                     }

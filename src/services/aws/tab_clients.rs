@@ -14,23 +14,23 @@ pub enum TabClientsError {
     /// Errors from S3 client operations
     #[error("S3 client error: {0}")]
     S3Error(#[from] S3ClientError),
-    
+
     /// Errors from DynamoDB client operations
     #[error("DynamoDB client error: {0}")]
     DynamoDBError(#[from] DynamoDBClientError),
-    
+
     /// Errors from CloudWatch client operations
     #[error("CloudWatch client error: {0}")]
     CloudWatchError(#[from] CloudWatchClientError),
-    
+
     /// Direct AWS SDK errors for S3
     #[error("AWS S3 SDK error: {0}")]
     AWSS3Error(#[from] aws_sdk_s3::Error),
-    
+
     /// Direct AWS SDK errors for DynamoDB
     #[error("AWS DynamoDB SDK error: {0}")]
     AWSDynamoDBError(#[from] aws_sdk_dynamodb::Error),
-    
+
     /// Direct AWS SDK errors for CloudWatch
     #[error("AWS CloudWatch SDK error: {0}")]
     AWSCloudWatchError(#[from] aws_sdk_cloudwatch::Error),
@@ -43,16 +43,16 @@ pub enum TabClientsError {
 pub struct TabClients {
     /// Cached S3 client instance
     s3_client: Option<Arc<Mutex<S3Client>>>,
-    
+
     /// Cached DynamoDB client instance
     dynamodb_client: Option<Arc<Mutex<DynamoDBClient>>>,
-    
+
     /// Cached CloudWatch client instance
     cloudwatch_client: Option<Arc<Mutex<CloudWatchClient>>>,
-    
+
     /// AWS profile name used for authentication
     profile: String,
-    
+
     /// AWS region for all service clients
     region: String,
 }

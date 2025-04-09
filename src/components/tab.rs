@@ -5,16 +5,16 @@ use crate::services::aws::TabClients;
 use crate::{
     components::ComponentFocus,
     components::dynamodb::DynamoDB,
-    services::read_config,
     event_managment::event::{
-        ServiceNavigatorEvent, CloudWatchComponentActions, ComponentActions,
-        DynamoDBComponentActions, Event, PopupAction, S3ComponentActions, TabAction, TabEvent,
-        WidgetAction, WidgetEventType, WidgetType,
+        CloudWatchComponentActions, ComponentActions, DynamoDBComponentActions, Event, PopupAction,
+        S3ComponentActions, ServiceNavigatorEvent, TabAction, TabEvent, WidgetAction,
+        WidgetEventType, WidgetType,
     },
+    services::read_config,
     widgets::{
         WidgetExt,
+        popup::{PopupContent, PopupWidget},
         service_navigator::{AWSServiceNavigator, NavigatorContent},
-        popup::{PopupWidget, PopupContent},
     },
 };
 use crossterm::event::{KeyCode, KeyEvent};
@@ -54,7 +54,7 @@ pub struct Tab {
     left_widgets: Box<dyn WidgetExt>,
     /// Currently active AWS service
     active_right_widget: WidgetType,
-    /// Channel for sending events 
+    /// Channel for sending events
     event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
     /// Current tab focus state
     current_focus: TabFocus,
@@ -96,8 +96,8 @@ impl Tab {
                 false,
                 NavigatorContent::Services(WidgetEventType::VALUES.to_vec()),
             )),
-            
-            popup_widget: Some(Box::new(PopupWidget::new(profiles,content, true, true))),
+
+            popup_widget: Some(Box::new(PopupWidget::new(profiles, content, true, true))),
             right_widgets,
             active_right_widget: WidgetType::DynamoDB,
             event_sender,
@@ -105,7 +105,7 @@ impl Tab {
             aws_clients: TabClients::new(String::new(), String::from("eu-west-1")),
         }
     }
-    
+
     /// Changes the active AWS service
     pub fn set_active_service(&mut self, service_type: WidgetType) {
         self.active_right_widget = service_type;
@@ -152,7 +152,7 @@ impl Tab {
             }
         }
     }
-    
+
     /// Processes tab events and routes them to appropriate handlers
     pub async fn process_event(&mut self, tab_event: TabEvent) {
         match tab_event {
@@ -381,7 +381,7 @@ impl Tab {
             }
         }
     }
-    
+
     /// Get the tab's name/title
     pub fn name(&self) -> &str {
         &self.name

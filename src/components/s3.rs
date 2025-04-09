@@ -1,13 +1,13 @@
 use crate::components::aws_base_component::AWSComponentBase;
 use crate::components::{AWSComponent, ComponentFocus};
 use crate::event_managment::event::{
-    ServiceNavigatorEvent, ComponentActions, Event, InputBoxEvent, S3ComponentActions, TabEvent,
+    ComponentActions, Event, InputBoxEvent, S3ComponentActions, ServiceNavigatorEvent, TabEvent,
     WidgetAction, WidgetEventType, WidgetType,
 };
 use crate::services::aws::s3_client::S3Client;
 use crate::widgets::WidgetExt;
-use crate::widgets::service_navigator::NavigatorContent;
 use crate::widgets::popup::PopupContent;
+use crate::widgets::service_navigator::NavigatorContent;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     buffer::Buffer,
@@ -234,13 +234,14 @@ impl AWSComponent for S3Component {
                     ComponentFocus::Input => self.base.input.handle_input(key_event),
                     ComponentFocus::Results => self.base.results_navigator.handle_input(key_event),
                     ComponentFocus::None => None,
+                    _ => None,
                 } {
                     self.base
                         .event_sender
                         .send(Event::Tab(TabEvent::ComponentActions(
-                            ComponentActions::S3ComponentActions(
-                                S3ComponentActions::WidgetAction(signal),
-                            ),
+                            ComponentActions::S3ComponentActions(S3ComponentActions::WidgetAction(
+                                signal,
+                            )),
                         )))
                         .unwrap();
                 }
@@ -307,11 +308,9 @@ impl AWSComponent for S3Component {
                                 self.base.details_popup.set_active(true);
                             }
                             Err(_) => {
-                                self.base
-                                    .details_popup
-                                    .set_content(PopupContent::Details(
-                                        "Error fetching object details".to_string(),
-                                    ));
+                                self.base.details_popup.set_content(PopupContent::Details(
+                                    "Error fetching object details".to_string(),
+                                ));
                                 self.base.details_popup.set_visible(true);
                                 self.base.details_popup.set_active(true);
                             }
@@ -330,10 +329,7 @@ impl AWSComponent for S3Component {
                 }
                 // Process events from child widgets
                 S3ComponentActions::WidgetAction(widget_action) => match widget_action {
-                    WidgetAction::ServiceNavigatorEvent(
-                        ref _aws_navigator_event,
-                        widget_type,
-                    ) => {
+                    WidgetAction::ServiceNavigatorEvent(ref _aws_navigator_event, widget_type) => {
                         if widget_type == WidgetType::AWSServiceNavigator {
                             if let Some(signal) =
                                 self.base.navigator.process_event(widget_action.clone())
@@ -403,9 +399,9 @@ impl AWSComponent for S3Component {
                             }
                         }
                     }
-                    WidgetAction::InputBoxEvent(ref _input_box_event) => {
+                    WidgetAction::InputBoxEvent(ref _input_box_event, _) => {
                         if let Some(signal) = self.base.input.process_event(widget_action) {
-                            if let WidgetAction::InputBoxEvent(InputBoxEvent::Written(content)) =
+                            if let WidgetAction::InputBoxEvent(InputBoxEvent::Written(content), _) =
                                 signal
                             {
                                 // Handle search input when a bucket is selected
@@ -499,7 +495,7 @@ impl AWSComponent for S3Component {
         self.base.set_focus_to_last();
         self.base.update_widget_states();
     }
-    
+
     fn get_help_items(&self) -> Vec<(String, String)> {
         // Return help items based on the base component's state
         self.base.get_help_items()

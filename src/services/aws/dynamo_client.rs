@@ -1,5 +1,5 @@
 //! DynamoDB client module
-//! 
+//!
 //! Provides functionality to interact with AWS DynamoDB service,
 //! including listing tables, querying data, and retrieving table metadata.
 
@@ -18,22 +18,22 @@ pub enum DynamoDBClientError {
     /// General AWS SDK error
     #[error("AWS SDK error: {0}")]
     AWSDynamoDBError(#[from] aws_sdk_dynamodb::Error),
-    
+
     /// Error during ListTables operation
     #[error("ListTables error: {0}")]
     ListTablesError(#[from] SdkError<ListTablesError, HttpResponse>),
-    
+
     /// Error during Query operation
     #[error("Query error: {0}")]
     QueryError(#[from] SdkError<QueryError, HttpResponse>),
-    
+
     /// Error during DescribeTable operation
     #[error("DescribeTable error: {0}")]
     DescribeTableError(
         #[from]
         SdkError<aws_sdk_dynamodb::operation::describe_table::DescribeTableError, HttpResponse>,
     ),
-    
+
     /// No primary key found for table - occurs when table schema is missing or incomplete
     #[error("No primary key found for table")]
     NoPrimaryKeyFound,
@@ -58,7 +58,7 @@ impl DynamoDBClient {
             .region(Region::new(region))
             .load()
             .await;
-            
+
         Ok(Self {
             client: Client::new(&config),
         })
@@ -87,7 +87,7 @@ impl DynamoDBClient {
         let table = result
             .table()
             .ok_or(DynamoDBClientError::NoPrimaryKeyFound)?;
-            
+
         let key_schema = table.key_schema();
         if key_schema.is_empty() {
             return Err(DynamoDBClientError::NoPrimaryKeyFound);
@@ -126,7 +126,7 @@ impl DynamoDBClient {
     ) -> Result<Vec<String>, DynamoDBClientError> {
         // First get the primary key name for this table
         let primary_key = self.get_table_primary_key(table_name.as_str()).await?;
-        
+
         // Create attribute value for query parameter
         let attr_value = AttributeValue::S(partition_key_value);
         let mut expression_attribute_values = std::collections::HashMap::new();
@@ -152,7 +152,7 @@ impl DynamoDBClient {
                     .iter()
                     .map(|(k, v)| (k.clone(), DynamoDBClient::attribute_to_json(v)))
                     .collect();
-                    
+
                 // Serialize to JSON string, ignoring errors
                 serde_json::to_string(&json_value).ok()
             })

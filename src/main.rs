@@ -22,16 +22,16 @@ pub mod widgets;
 async fn main() -> color_eyre::Result<()> {
     // Initialize error handling with detailed backtraces
     color_eyre::install()?;
-    
+
     // Initialize the terminal UI with ratatui
     let terminal = ratatui::init();
-    
+
     // Create and run the application with the configured terminal
     let result = App::new().run(terminal).await;
-    
+
     // Restore terminal to original state before exiting
     ratatui::restore();
-    
+
     // Return the final result, which includes any errors that occurred
     result
 }

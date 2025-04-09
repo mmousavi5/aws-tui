@@ -1,5 +1,5 @@
 //! S3 client module
-//! 
+//!
 //! Provides functionality to interact with AWS S3 service,
 //! including listing buckets, browsing objects, and retrieving object metadata.
 

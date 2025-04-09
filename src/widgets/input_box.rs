@@ -3,7 +3,7 @@
 //! Provides a text input box with clipboard support and cursor positioning.
 //! Used for search queries, filters, and other text input needs.
 
-use crate::event_managment::event::{InputBoxEvent, WidgetAction};
+use crate::event_managment::event::{InputBoxEvent, InputBoxType, WidgetAction};
 use crate::widgets::WidgetExt;
 use clipboard::{ClipboardContext, ClipboardProvider};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -20,18 +20,20 @@ use std::any::Any;
 
 /// Widget for text input with cursor positioning and clipboard integration
 pub struct InputBoxWidget {
-    content: String,           // Current text content
-    cursor_position: usize,    // Position of cursor within the text
-    active: bool,              // Whether this widget has input focus
-    visible: bool,             // Whether this widget should be rendered
-    title: String,             // Title displayed in the border
+    input_type: InputBoxType,            // Type of widget (e.g., InputBox)
+    content: String,                     // Current text content
+    cursor_position: usize,              // Position of cursor within the text
+    active: bool,                        // Whether this widget has input focus
+    visible: bool,                       // Whether this widget should be rendered
+    title: String,                       // Title displayed in the border
     clipboard: Option<ClipboardContext>, // Clipboard access for copy/paste
 }
 
 impl InputBoxWidget {
     /// Creates a new input box with the specified title and active state
-    pub fn new(title: &str, active: bool) -> Self {
+    pub fn new(input_type: InputBoxType, title: &str, active: bool) -> Self {
         Self {
+            input_type,
             content: String::new(),
             cursor_position: 0,
             active,
@@ -55,6 +57,15 @@ impl InputBoxWidget {
     fn copy_to_clipboard(&mut self) {
         if let Some(ref mut ctx) = self.clipboard {
             let _ = ctx.set_contents(self.content.clone());
+        }
+    }
+
+    /// Returns the current text content of the input box
+    pub fn get_content(&self) -> Option<String> {
+        if self.content.is_empty() {
+            None
+        } else {
+            Some(self.content.clone())
         }
     }
 }
@@ -104,28 +115,46 @@ impl WidgetExt for InputBoxWidget {
             // Clipboard operations with Ctrl modifiers
             KeyCode::Char('v') if key_event.modifiers == KeyModifiers::CONTROL => {
                 self.paste_from_clipboard();
-                Some(WidgetAction::InputBoxEvent(InputBoxEvent::Written(
-                    self.content.clone(),
-                )))
+                Some(WidgetAction::InputBoxEvent(
+                    InputBoxEvent::Written(self.content.clone()),
+                    self.input_type.clone(),
+                ))
             }
             KeyCode::Char('c') if key_event.modifiers == KeyModifiers::CONTROL => {
                 self.copy_to_clipboard();
-                Some(WidgetAction::InputBoxEvent(InputBoxEvent::Written(
-                    self.content.clone(),
-                )))
+                Some(WidgetAction::InputBoxEvent(
+                    InputBoxEvent::Written(self.content.clone()),
+                    self.input_type.clone(),
+                ))
             }
             // Pass through regular character input
-            KeyCode::Char(ref _c) => Some(WidgetAction::InputBoxEvent(InputBoxEvent::KeyPress(
-                key_event,
-            ))),
+            KeyCode::Char(ref _c) => Some(WidgetAction::InputBoxEvent(
+                InputBoxEvent::KeyPress(key_event),
+                self.input_type.clone(),
+            )),
             // Text editing commands
-            KeyCode::Backspace => Some(WidgetAction::InputBoxEvent(InputBoxEvent::Backspace)),
-            KeyCode::Delete => Some(WidgetAction::InputBoxEvent(InputBoxEvent::Delete)),
+            KeyCode::Backspace => Some(WidgetAction::InputBoxEvent(
+                InputBoxEvent::Backspace,
+                self.input_type.clone(),
+            )),
+            KeyCode::Delete => Some(WidgetAction::InputBoxEvent(
+                InputBoxEvent::Delete,
+                self.input_type.clone(),
+            )),
             // Cursor movement
-            KeyCode::Left => Some(WidgetAction::InputBoxEvent(InputBoxEvent::Left)),
-            KeyCode::Right => Some(WidgetAction::InputBoxEvent(InputBoxEvent::Right)),
+            KeyCode::Left => Some(WidgetAction::InputBoxEvent(
+                InputBoxEvent::Left,
+                self.input_type.clone(),
+            )),
+            KeyCode::Right => Some(WidgetAction::InputBoxEvent(
+                InputBoxEvent::Right,
+                self.input_type.clone(),
+            )),
             // Submit content
-            KeyCode::Enter => Some(WidgetAction::InputBoxEvent(InputBoxEvent::Enter)),
+            KeyCode::Enter => Some(WidgetAction::InputBoxEvent(
+                InputBoxEvent::Enter,
+                self.input_type.clone(),
+            )),
 
             _ => None,
         }
@@ -159,7 +188,7 @@ impl WidgetExt for InputBoxWidget {
     /// Processes input events and modifies content accordingly
     fn process_event(&mut self, event: WidgetAction) -> Option<WidgetAction> {
         match event {
-            WidgetAction::InputBoxEvent(input_event) => match input_event {
+            WidgetAction::InputBoxEvent(input_event, _) => match input_event {
                 // Add character at cursor position
                 InputBoxEvent::KeyPress(key_event) => {
                     if let KeyCode::Char(c) = key_event.code {
@@ -201,9 +230,10 @@ impl WidgetExt for InputBoxWidget {
                 InputBoxEvent::Enter => {
                     // Handle enter key event
                     // For example, you can send the content to an event sender or process it
-                    Some(WidgetAction::InputBoxEvent(InputBoxEvent::Written(
-                        self.content.clone(),
-                    )))
+                    Some(WidgetAction::InputBoxEvent(
+                        InputBoxEvent::Written(self.content.clone()),
+                        self.input_type.clone(),
+                    ))
                 }
                 _ => None,
             },
