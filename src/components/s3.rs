@@ -1,7 +1,7 @@
 use crate::components::aws_base_component::AWSComponentBase;
 use crate::components::{AWSComponent, ComponentFocus};
 use crate::event_managment::event::{
-    ComponentActions, Event, InputBoxEvent, S3ComponentActions, ServiceNavigatorEvent, TabEvent,
+    ComponentAction, ComponentType, Event, InputBoxEvent, ServiceNavigatorEvent, TabEvent,
     WidgetAction, WidgetEventType, WidgetType,
 };
 use crate::services::aws::TabClients;
@@ -20,6 +20,8 @@ use tokio::sync::Mutex;
 
 /// Component for interacting with AWS S3 storage
 pub struct S3Component {
+    /// Component type identifier
+    component_type: ComponentType,
     /// Common AWS component functionality
     base: AWSComponentBase,
     /// Client for S3 API interactions
@@ -36,17 +38,13 @@ impl S3Component {
     /// Creates a new S3 component with the provided event sender
     pub fn new(event_sender: tokio::sync::mpsc::UnboundedSender<Event>) -> Self {
         Self {
+            component_type: ComponentType::DynamoDB,
             base: AWSComponentBase::new(event_sender.clone(), NavigatorContent::Records(vec![])),
             s3_client: None,
             current_path: String::new(),
             selected_bucket: None,
             aws_clients: None,
         }
-    }
-
-    /// Assigns an S3 client to this component
-    pub fn set_client(&mut self, s3_client: Arc<Mutex<S3Client>>) {
-        self.s3_client = Some(s3_client);
     }
 
     /// Handles the selection of a bucket and fetches its contents
@@ -119,10 +117,8 @@ impl S3Component {
                 self.base
                     .event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
-                        ComponentActions::S3ComponentActions(S3ComponentActions::LoadPath(
-                            bucket.clone(),
-                            self.current_path.clone(),
-                        )),
+                        ComponentAction::LoadPath(bucket.clone(), self.current_path.clone()),
+                        self.component_type.clone(),
                     )))
                     .unwrap();
             }
@@ -175,9 +171,8 @@ impl AWSComponent for S3Component {
                 self.base
                     .event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
-                        ComponentActions::S3ComponentActions(S3ComponentActions::WidgetAction(
-                            signal,
-                        )),
+                        ComponentAction::WidgetAction(signal),
+                        self.component_type.clone(),
                     )))
                     .unwrap();
                 return;
@@ -189,7 +184,8 @@ impl AWSComponent for S3Component {
                 self.base
                     .event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
-                        ComponentActions::S3ComponentActions(S3ComponentActions::NextFocus),
+                        ComponentAction::NextFocus,
+                        self.component_type.clone(),
                     )))
                     .unwrap();
             }
@@ -197,7 +193,8 @@ impl AWSComponent for S3Component {
                 self.base
                     .event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
-                        ComponentActions::S3ComponentActions(S3ComponentActions::PreviousFocus),
+                        ComponentAction::PreviousFocus,
+                        self.component_type.clone(),
                     )))
                     .unwrap();
             }
@@ -207,7 +204,8 @@ impl AWSComponent for S3Component {
                     self.base
                         .event_sender
                         .send(Event::Tab(TabEvent::ComponentActions(
-                            ComponentActions::S3ComponentActions(S3ComponentActions::NavigateUp),
+                            ComponentAction::NavigateUp,
+                            self.component_type.clone(),
                         )))
                         .unwrap();
                 }
@@ -243,9 +241,8 @@ impl AWSComponent for S3Component {
                     self.base
                         .event_sender
                         .send(Event::Tab(TabEvent::ComponentActions(
-                            ComponentActions::S3ComponentActions(S3ComponentActions::WidgetAction(
-                                signal,
-                            )),
+                            ComponentAction::WidgetAction(signal),
+                            self.component_type.clone(),
                         )))
                         .unwrap();
                 }
@@ -254,11 +251,11 @@ impl AWSComponent for S3Component {
     }
 
     /// Processes S3-specific component actions
-    async fn process_event(&mut self, event: ComponentActions) {
+    async fn process_event(&mut self, event: ComponentAction) {
         match event {
-            ComponentActions::S3ComponentActions(s3_event) => match s3_event {
+            s3_event => match s3_event {
                 // Handle bucket selection
-                S3ComponentActions::Active(aws_profile) => {
+                ComponentAction::Active(aws_profile) => {
                     self.aws_clients =
                         Some(TabClients::new(aws_profile, String::from("eu-west-1")));
 
@@ -285,32 +282,32 @@ impl AWSComponent for S3Component {
                     }
                 }
 
-                S3ComponentActions::Focused => {
+                ComponentAction::Focused => {
                     // Set the component as inactive
                     self.set_active(false);
                 }
-                S3ComponentActions::Unfocused => {
+                ComponentAction::Unfocused => {
                     self.reset_focus();
                     // Set the component as inactive
                     self.set_active(false);
                 }
-                S3ComponentActions::FocusedToLast => {
+                ComponentAction::FocusedToLast => {
                     // Set the component as inactive
                 }
 
-                S3ComponentActions::SelectBucket(bucket) => {
+                ComponentAction::SelectBucket(bucket) => {
                     self.handle_bucket_selection(bucket).await;
                 }
                 // Navigate into a folder
-                S3ComponentActions::NavigateFolder(path) => {
+                ComponentAction::NavigateFolder(path) => {
                     self.navigate_folder(path).await;
                 }
                 // Navigate up to parent directory
-                S3ComponentActions::NavigateUp => {
+                ComponentAction::NavigateUp => {
                     self.navigate_up();
                 }
                 // Load contents at a specific path
-                S3ComponentActions::LoadPath(bucket, path) => {
+                ComponentAction::LoadPath(bucket, path) => {
                     if let Some(client) = &self.s3_client {
                         let objects = client
                             .lock()
@@ -329,7 +326,7 @@ impl AWSComponent for S3Component {
                     }
                 }
                 // Display object details in popup
-                S3ComponentActions::PopupDetails(key) => {
+                ComponentAction::PopupDetails(key) => {
                     if let (Some(client), Some(bucket)) = (&self.s3_client, &self.selected_bucket) {
                         // Build full object key with current path
                         let full_key = if self.current_path.is_empty() {
@@ -362,17 +359,17 @@ impl AWSComponent for S3Component {
                     }
                 }
                 // Cycle focus forward through widgets
-                S3ComponentActions::NextFocus => {
+                ComponentAction::NextFocus => {
                     self.base.focus_next();
                     self.base.update_widget_states();
                 }
                 // Cycle focus backward through widgets
-                S3ComponentActions::PreviousFocus => {
+                ComponentAction::PreviousFocus => {
                     self.base.focus_previous();
                     self.base.update_widget_states();
                 }
                 // Process events from child widgets
-                S3ComponentActions::WidgetAction(widget_action) => match widget_action {
+                ComponentAction::WidgetAction(widget_action) => match widget_action {
                     WidgetAction::ServiceNavigatorEvent(ref _aws_navigator_event, widget_type) => {
                         if widget_type == WidgetType::AWSServiceNavigator {
                             if let Some(signal) =
@@ -389,9 +386,8 @@ impl AWSComponent for S3Component {
                                         self.base
                                             .event_sender
                                             .send(Event::Tab(TabEvent::ComponentActions(
-                                                ComponentActions::S3ComponentActions(
-                                                    S3ComponentActions::SelectBucket(bucket),
-                                                ),
+                                                ComponentAction::SelectBucket(bucket),
+                                                self.component_type.clone(),
                                             )))
                                             .unwrap();
                                     }
@@ -419,11 +415,8 @@ impl AWSComponent for S3Component {
                                             self.base
                                                 .event_sender
                                                 .send(Event::Tab(TabEvent::ComponentActions(
-                                                    ComponentActions::S3ComponentActions(
-                                                        S3ComponentActions::NavigateFolder(
-                                                            folder_name,
-                                                        ),
-                                                    ),
+                                                    ComponentAction::NavigateFolder(folder_name),
+                                                    self.component_type.clone(),
                                                 )))
                                                 .unwrap();
                                         } else {
@@ -431,9 +424,8 @@ impl AWSComponent for S3Component {
                                             self.base
                                                 .event_sender
                                                 .send(Event::Tab(TabEvent::ComponentActions(
-                                                    ComponentActions::S3ComponentActions(
-                                                        S3ComponentActions::PopupDetails(path),
-                                                    ),
+                                                    ComponentAction::PopupDetails(path),
+                                                    self.component_type.clone(),
                                                 )))
                                                 .unwrap();
                                         }
@@ -459,12 +451,8 @@ impl AWSComponent for S3Component {
                                     self.base
                                         .event_sender
                                         .send(Event::Tab(TabEvent::ComponentActions(
-                                            ComponentActions::S3ComponentActions(
-                                                S3ComponentActions::LoadPath(
-                                                    bucket.clone(),
-                                                    search_path,
-                                                ),
-                                            ),
+                                            ComponentAction::LoadPath(bucket.clone(), search_path),
+                                            self.component_type.clone(),
                                         )))
                                         .unwrap();
                                 }
@@ -480,7 +468,6 @@ impl AWSComponent for S3Component {
                 },
                 _ => {}
             },
-            _ => {} // Ignore other component actions that don't belong to S3
         }
     }
 

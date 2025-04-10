@@ -6,8 +6,8 @@ use crate::{
     components::ComponentFocus,
     components::dynamodb::DynamoDB,
     event_managment::event::{
-        CloudWatchComponentActions, ComponentActions, DynamoDBComponentActions, Event, PopupAction,
-        S3ComponentActions, ServiceNavigatorEvent, TabAction, TabEvent, WidgetAction,
+        ComponentAction, ComponentType,
+        Event, PopupAction, ServiceNavigatorEvent, TabAction, TabEvent, WidgetAction,
         WidgetEventType, WidgetType,
     },
     services::read_config,
@@ -27,7 +27,6 @@ use ratatui::{
     widgets::{Block, BorderType, Paragraph, Tabs, Widget},
 };
 use std::collections::HashMap;
-use tokio::process;
 
 // Constants
 const TAB_HEIGHT: u16 = 3;
@@ -164,38 +163,35 @@ impl Tab {
             TabEvent::WidgetActions(widget_action) => {
                 self.process_widget_action(widget_action).await;
             }
-            TabEvent::ComponentActions(component_action) => {
+            TabEvent::ComponentActions(component_action, component_type) => {
                 // Route component actions to the appropriate component based on type
-                self.process_component_action(component_action).await;
+                self.process_component_action(component_action, component_type)
+                    .await;
             }
         }
     }
 
-    pub async fn process_component_action(&mut self, component_action: ComponentActions) {
-        match component_action {
-            ComponentActions::S3ComponentActions(_)
-                if self.active_right_widget == WidgetType::S3 =>
-            {
+    pub async fn process_component_action(
+        &mut self,
+        component_action: ComponentAction,
+        component_type: ComponentType,
+    ) {
+        match component_type {
+            ComponentType::S3 => {
                 if let Some(widget) = self.right_widgets.get_mut(&WidgetType::S3) {
                     widget.process_event(component_action).await;
                 }
             }
-            ComponentActions::DynamoDBComponentActions(_)
-                if self.active_right_widget == WidgetType::DynamoDB =>
-            {
+            ComponentType::DynamoDB => {
                 if let Some(widget) = self.right_widgets.get_mut(&WidgetType::DynamoDB) {
                     widget.process_event(component_action).await;
                 }
             }
-            ComponentActions::CloudWatchComponentActions(_)
-                if self.active_right_widget == WidgetType::CloudWatch =>
-            {
+            ComponentType::CloudWatch => {
                 if let Some(widget) = self.right_widgets.get_mut(&WidgetType::CloudWatch) {
                     widget.process_event(component_action).await;
                 }
             }
-            // Handle generic component actions that aren't specific to a component type
-            _ => {}
         }
     }
 
@@ -253,9 +249,8 @@ impl Tab {
                     self.active_right_widget = WidgetType::DynamoDB;
                     self.event_sender
                         .send(Event::Tab(TabEvent::ComponentActions(
-                            ComponentActions::DynamoDBComponentActions(
-                                DynamoDBComponentActions::Active(self.name.clone()),
-                            ),
+                            ComponentAction::Active(self.name.clone()),
+                            ComponentType::DynamoDB,
                         )))
                         .unwrap();
                 }
@@ -263,9 +258,10 @@ impl Tab {
                     self.active_right_widget = WidgetType::S3;
                     self.event_sender
                         .send(Event::Tab(TabEvent::ComponentActions(
-                            ComponentActions::S3ComponentActions(S3ComponentActions::Active(
+                            ComponentAction::Active(
                                 self.name.clone(),
-                            )),
+                            ),
+                            ComponentType::S3,
                         )))
                         .unwrap();
                 }
@@ -273,10 +269,8 @@ impl Tab {
                     self.active_right_widget = WidgetType::CloudWatch;
                     self.event_sender
                         .send(Event::Tab(TabEvent::ComponentActions(
-                            ComponentActions::CloudWatchComponentActions(
-                                CloudWatchComponentActions::Active(self.name.clone()),
-                            ),
-                        )))
+                            ComponentAction::Active(self.name.clone()),
+                            ComponentType::CloudWatch,)))
                         .unwrap();
                 }
                 _ => {}
@@ -299,27 +293,23 @@ impl Tab {
                                 WidgetType::S3 => {
                                     self.event_sender
                                         .send(Event::Tab(TabEvent::ComponentActions(
-                                            ComponentActions::S3ComponentActions(
-                                                S3ComponentActions::NextFocus,
-                                            ),
+                                            ComponentAction::NextFocus,
+                                            ComponentType::S3,
                                         )))
                                         .unwrap();
                                 }
                                 WidgetType::DynamoDB => {
                                     self.event_sender
                                         .send(Event::Tab(TabEvent::ComponentActions(
-                                            ComponentActions::DynamoDBComponentActions(
-                                                DynamoDBComponentActions::NextFocus,
-                                            ),
-                                        )))
+                                            ComponentAction::NextFocus,
+                                                ComponentType::DynamoDB,
+                                            )))
                                         .unwrap();
                                 }
                                 WidgetType::CloudWatch => {
                                     self.event_sender
                                         .send(Event::Tab(TabEvent::ComponentActions(
-                                            ComponentActions::CloudWatchComponentActions(
-                                                CloudWatchComponentActions::NextFocus,
-                                            ),
+                                            ComponentAction::NextFocus, ComponentType::CloudWatch
                                         )))
                                         .unwrap();
                                 }
@@ -339,18 +329,14 @@ impl Tab {
                                 WidgetType::S3 => {
                                     self.event_sender
                                         .send(Event::Tab(TabEvent::ComponentActions(
-                                            ComponentActions::S3ComponentActions(
-                                                S3ComponentActions::PreviousFocus,
-                                            ),
+                                            ComponentAction::PreviousFocus, ComponentType::S3
                                         )))
                                         .unwrap();
                                 }
                                 WidgetType::DynamoDB => {
                                     self.event_sender
                                         .send(Event::Tab(TabEvent::ComponentActions(
-                                            ComponentActions::DynamoDBComponentActions(
-                                                DynamoDBComponentActions::PreviousFocus,
-                                            ),
+                                            ComponentAction::PreviousFocus,ComponentType::DynamoDB
                                         )))
                                         .unwrap();
                                 }
@@ -358,9 +344,7 @@ impl Tab {
                                 WidgetType::CloudWatch => {
                                     self.event_sender
                                         .send(Event::Tab(TabEvent::ComponentActions(
-                                            ComponentActions::CloudWatchComponentActions(
-                                                CloudWatchComponentActions::PreviousFocus,
-                                            ),
+                                            ComponentAction::PreviousFocus, ComponentType::CloudWatch
                                         )))
                                         .unwrap();
                                 }
@@ -396,25 +380,21 @@ impl Tab {
             WidgetType::S3 => {
                 self.event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
-                        ComponentActions::S3ComponentActions(S3ComponentActions::Focused),
+                        ComponentAction::Focused,ComponentType::S3,
                     )))
                     .unwrap();
             }
             WidgetType::DynamoDB => {
                 self.event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
-                        ComponentActions::DynamoDBComponentActions(
-                            DynamoDBComponentActions::Focused,
-                        ),
+                        ComponentAction::Focused,ComponentType::DynamoDB,
                     )))
                     .unwrap();
             }
             WidgetType::CloudWatch => {
                 self.event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
-                        ComponentActions::CloudWatchComponentActions(
-                            CloudWatchComponentActions::Focused,
-                        ),
+                        ComponentAction::Focused,ComponentType::CloudWatch,
                     )))
                     .unwrap();
             }
@@ -427,32 +407,27 @@ impl Tab {
             WidgetType::S3 => {
                 self.event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
-                        ComponentActions::S3ComponentActions(S3ComponentActions::Unfocused),
+                        ComponentAction::Unfocused,ComponentType::S3
                     )))
                     .unwrap();
             }
             WidgetType::DynamoDB => {
                 self.event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
-                        ComponentActions::DynamoDBComponentActions(
-                            DynamoDBComponentActions::Unfocused,
-                        ),
+                        ComponentAction::Unfocused,ComponentType::DynamoDB
                     )))
                     .unwrap();
             }
             WidgetType::CloudWatch => {
                 self.event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
-                        ComponentActions::CloudWatchComponentActions(
-                            CloudWatchComponentActions::Unfocused,
-                        ),
+                        ComponentAction::Unfocused,ComponentType::CloudWatch
                     )))
                     .unwrap();
             }
             _ => {}
         }
     }
-
 
     /// Get the tab's name/title
     pub fn name(&self) -> &str {

@@ -1,8 +1,8 @@
 use crate::components::aws_base_component::AWSComponentBase;
 use crate::components::{AWSComponent, ComponentFocus};
 use crate::event_managment::event::{
-    ComponentActions, DynamoDBComponentActions, Event, InputBoxEvent, ServiceNavigatorEvent,
-    TabEvent, WidgetAction, WidgetEventType, WidgetType,
+    ComponentAction, ComponentType, Event, InputBoxEvent, ServiceNavigatorEvent, TabEvent,
+    WidgetAction, WidgetEventType, WidgetType,
 };
 use crate::services::aws::TabClients;
 use crate::services::aws::dynamo_client::DynamoDBClient;
@@ -17,6 +17,8 @@ use tokio::sync::Mutex;
 
 /// Component for interacting with AWS DynamoDB
 pub struct DynamoDB {
+    /// Component type identifier
+    component_type: ComponentType,
     /// Common AWS component functionality
     base: AWSComponentBase,
     /// Client for DynamoDB API interactions
@@ -29,15 +31,11 @@ impl DynamoDB {
     /// Creates a new DynamoDB component with the provided event sender
     pub fn new(event_sender: tokio::sync::mpsc::UnboundedSender<Event>) -> Self {
         Self {
+            component_type: ComponentType::DynamoDB,
             base: AWSComponentBase::new(event_sender.clone(), NavigatorContent::Records(vec![])),
             dynamodb_client: None,
             aws_clients: None,
         }
-    }
-
-    /// Assigns a DynamoDB client to this component
-    pub fn set_client(&mut self, dynamodb_client: Arc<Mutex<DynamoDBClient>>) {
-        self.dynamodb_client = Some(dynamodb_client);
     }
 }
 
@@ -61,9 +59,8 @@ impl AWSComponent for DynamoDB {
                 self.base
                     .event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
-                        ComponentActions::DynamoDBComponentActions(
-                            DynamoDBComponentActions::WidgetActions(signal),
-                        ),
+                        ComponentAction::WidgetAction(signal),
+                        self.component_type.clone(),
                     )))
                     .unwrap();
                 return;
@@ -75,9 +72,8 @@ impl AWSComponent for DynamoDB {
                 self.base
                     .event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
-                        ComponentActions::DynamoDBComponentActions(
-                            DynamoDBComponentActions::NextFocus,
-                        ),
+                        ComponentAction::NextFocus,
+                        self.component_type.clone(),
                     )))
                     .unwrap();
             }
@@ -85,9 +81,8 @@ impl AWSComponent for DynamoDB {
                 self.base
                     .event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
-                        ComponentActions::DynamoDBComponentActions(
-                            DynamoDBComponentActions::PreviousFocus,
-                        ),
+                        ComponentAction::PreviousFocus,
+                        self.component_type.clone(),
                     )))
                     .unwrap();
             }
@@ -122,9 +117,8 @@ impl AWSComponent for DynamoDB {
                     self.base
                         .event_sender
                         .send(Event::Tab(TabEvent::ComponentActions(
-                            ComponentActions::DynamoDBComponentActions(
-                                DynamoDBComponentActions::WidgetActions(signal),
-                            ),
+                            ComponentAction::WidgetAction(signal),
+                            self.component_type.clone(),
                         )))
                         .unwrap();
                 }
@@ -133,11 +127,9 @@ impl AWSComponent for DynamoDB {
     }
 
     /// Processes component-specific actions
-    async fn process_event(&mut self, event: ComponentActions) {
+    async fn process_event(&mut self, event: ComponentAction) {
         match event {
-            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::Active(
-                aws_profile,
-            )) => {
+            ComponentAction::Active(aws_profile) => {
                 self.aws_clients = Some(TabClients::new(aws_profile, String::from("eu-west-1")));
 
                 // Unwrap the Result and handle errors properly
@@ -162,28 +154,24 @@ impl AWSComponent for DynamoDB {
                     }
                 }
             }
-            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::Focused) => {
+            ComponentAction::Focused => {
                 self.set_active(true);
             }
-            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::Unfocused) => {
+            ComponentAction::Unfocused => {
                 self.reset_focus();
                 // Set the component as inactive
                 self.set_active(false);
             }
 
             // Handle selection of a table
-            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::SetTitle(
-                title,
-            )) => {
+            ComponentAction::SetTitle(title) => {
                 self.base.navigator.set_title(title.clone());
                 self.base.selected_item = Some(title);
                 self.base.focus_next();
                 self.base.update_widget_states();
             }
             // Execute a query and show results
-            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::SetQuery(
-                query,
-            )) => {
+            ComponentAction::SetQuery(query) => {
                 self.base.results_navigator.set_title(query.clone());
                 self.base.selected_query = Some(query.clone());
 
@@ -206,9 +194,7 @@ impl AWSComponent for DynamoDB {
                 self.base.update_widget_states();
             }
             // Show item details in a popup
-            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::PopupDetails(
-                title,
-            )) => {
+            ComponentAction::PopupDetails(title) => {
                 self.base
                     .details_popup
                     .set_content(PopupContent::Details(title.clone()));
@@ -216,14 +202,12 @@ impl AWSComponent for DynamoDB {
                 self.base.details_popup.set_active(true);
             }
             // Cycle focus through widgets
-            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::NextFocus) => {
+            ComponentAction::NextFocus => {
                 self.base.focus_next();
                 self.base.update_widget_states();
             }
             // Handle widget-specific actions
-            ComponentActions::DynamoDBComponentActions(
-                DynamoDBComponentActions::WidgetActions(widget_action),
-            ) => match widget_action {
+            ComponentAction::WidgetAction(widget_action) => match widget_action {
                 // Process navigator events
                 WidgetAction::ServiceNavigatorEvent(ref _aws_navigator_event, widget_type) => {
                     if widget_type == WidgetType::AWSServiceNavigator {
@@ -241,9 +225,8 @@ impl AWSComponent for DynamoDB {
                                     self.base
                                         .event_sender
                                         .send(Event::Tab(TabEvent::ComponentActions(
-                                            ComponentActions::DynamoDBComponentActions(
-                                                DynamoDBComponentActions::SetTitle(title.clone()),
-                                            ),
+                                            ComponentAction::SetTitle(title.clone()),
+                                            self.component_type.clone(),
                                         )))
                                         .unwrap();
                                 }
@@ -268,11 +251,8 @@ impl AWSComponent for DynamoDB {
                                     self.base
                                         .event_sender
                                         .send(Event::Tab(TabEvent::ComponentActions(
-                                            ComponentActions::DynamoDBComponentActions(
-                                                DynamoDBComponentActions::PopupDetails(
-                                                    title.clone(),
-                                                ),
-                                            ),
+                                            ComponentAction::PopupDetails(title.clone()),
+                                            self.component_type.clone(),
                                         )))
                                         .unwrap();
                                 }
@@ -290,9 +270,8 @@ impl AWSComponent for DynamoDB {
                                 self.base
                                     .event_sender
                                     .send(Event::Tab(TabEvent::ComponentActions(
-                                        ComponentActions::DynamoDBComponentActions(
-                                            DynamoDBComponentActions::SetQuery(content),
-                                        ),
+                                        ComponentAction::SetQuery(content),
+                                        self.component_type.clone(),
                                     )))
                                     .unwrap();
                             }

@@ -1,8 +1,8 @@
 use crate::components::aws_base_component::AWSComponentBase;
 use crate::components::{AWSComponent, ComponentFocus};
 use crate::event_managment::event::{
-    CloudWatchComponentActions, ComponentActions, Event, InputBoxEvent, InputBoxType,
-    ServiceNavigatorEvent, TabEvent, WidgetAction, WidgetEventType, WidgetType,
+    ComponentAction, ComponentType, Event, InputBoxEvent, InputBoxType, ServiceNavigatorEvent,
+    TabEvent, WidgetAction, WidgetEventType, WidgetType,
 };
 use crate::services::aws::TabClients;
 use crate::services::aws::cloudwatch_client::CloudWatchClient;
@@ -21,6 +21,8 @@ use tokio::sync::Mutex;
 
 /// Component for interacting with AWS CloudWatch logs
 pub struct CloudWatch {
+    /// Component type identifier
+    component_type: ComponentType,
     /// Common AWS component functionality
     base: AWSComponentBase,
     /// Client for CloudWatch API interactions
@@ -39,6 +41,7 @@ impl CloudWatch {
     /// Creates a new CloudWatch component with the provided event sender
     pub fn new(event_sender: tokio::sync::mpsc::UnboundedSender<Event>) -> Self {
         Self {
+            component_type: ComponentType::CloudWatch,
             base: AWSComponentBase::new(event_sender.clone(), NavigatorContent::Records(vec![])),
             cloudwatch_client: None,
             selected_log_group: None,
@@ -50,11 +53,6 @@ impl CloudWatch {
             time_range: None,
             aws_clients: None,
         }
-    }
-
-    /// Assigns a CloudWatch client to this component
-    pub fn set_client(&mut self, cloudwatch_client: Arc<Mutex<CloudWatchClient>>) {
-        self.cloudwatch_client = Some(cloudwatch_client);
     }
 
     /// Handles the selection of a log group and fetches its logs
@@ -92,28 +90,30 @@ impl CloudWatch {
             } else {
                 format!("{}: {} (Loading...)", title_prefix, filter_pattern)
             };
-            
-            self.base.event_sender.send(Event::Tab(TabEvent::ComponentActions(
-                ComponentActions::CloudWatchComponentActions(
-                    CloudWatchComponentActions::WidgetAction(WidgetAction::ServiceNavigatorEvent(
-                        ServiceNavigatorEvent::UpdateTitle(
-                            title,
-                        ),
+
+            self.base
+                .event_sender
+                .send(Event::Tab(TabEvent::ComponentActions(
+                    ComponentAction::WidgetAction(WidgetAction::ServiceNavigatorEvent(
+                        ServiceNavigatorEvent::UpdateTitle(title),
                         WidgetType::QueryResultsNavigator,
-                    ))
-                )
-            ))).unwrap_or_default();
-            self.base.event_sender.send(Event::Tab(TabEvent::ComponentActions(
-                ComponentActions::CloudWatchComponentActions(
-                    CloudWatchComponentActions::WidgetAction(WidgetAction::ServiceNavigatorEvent(
-                        ServiceNavigatorEvent::UpdateContent(
-                            vec!["Fetching logs, please wait...".to_string()],
-                        ),
+                    )),
+                    self.component_type.clone(),
+                )))
+                .unwrap_or_default();
+            self.base
+                .event_sender
+                .send(Event::Tab(TabEvent::ComponentActions(
+                    ComponentAction::WidgetAction(WidgetAction::ServiceNavigatorEvent(
+                        ServiceNavigatorEvent::UpdateContent(vec![
+                            "Fetching logs, please wait...".to_string(),
+                        ]),
                         WidgetType::QueryResultsNavigator,
-                    ))
-                )
-            ))).unwrap_or_default();
-            
+                    )),
+                    self.component_type.clone(),
+                )))
+                .unwrap_or_default();
+
             // Clone what we need for the background task
             let client_clone = Arc::clone(client_ref);
             let log_group = log_group.to_string();
@@ -121,7 +121,7 @@ impl CloudWatch {
             let time_range = time_range.to_string();
             let event_sender = self.base.event_sender.clone();
             let title = title_prefix.to_string();
-            
+            let component_type = self.component_type.clone();
             // Spawn background task to fetch logs without blocking UI
             let _ = tokio::spawn(async move {
                 // Fetch logs in background
@@ -131,9 +131,11 @@ impl CloudWatch {
                     client_clone.lock().await.list_log_events(
                         &log_group,
                         &filter_pattern,
-                        Some(&time_range)
-                    )
-                ).await {
+                        Some(&time_range),
+                    ),
+                )
+                .await
+                {
                     Ok(result) => result,
                     Err(_) => Ok(vec!["Request timed out after 30 seconds".to_string()]),
                 };
@@ -141,44 +143,39 @@ impl CloudWatch {
                 match logs_result {
                     Ok(logs) => {
                         // Send event with logs
-                        event_sender.send(Event::Tab(TabEvent::ComponentActions(
-                            ComponentActions::CloudWatchComponentActions(
-                                CloudWatchComponentActions::WidgetAction(WidgetAction::ServiceNavigatorEvent(
-                                    ServiceNavigatorEvent::UpdateContent(
-                                        logs,
-                                    ),
+                        event_sender
+                            .send(Event::Tab(TabEvent::ComponentActions(
+                                ComponentAction::WidgetAction(WidgetAction::ServiceNavigatorEvent(
+                                    ServiceNavigatorEvent::UpdateContent(logs),
                                     WidgetType::QueryResultsNavigator,
-                                ))
-                            )
-                        ))).unwrap_or_default();
-                        event_sender.send(Event::Tab(TabEvent::ComponentActions(
-                            ComponentActions::CloudWatchComponentActions(
-                                CloudWatchComponentActions::WidgetAction(WidgetAction::ServiceNavigatorEvent(
-                                    ServiceNavigatorEvent::UpdateTitle(
-                                        title,
-                                    ),
+                                )),
+                                component_type.clone(),
+                            )))
+                            .unwrap_or_default();
+                        event_sender
+                            .send(Event::Tab(TabEvent::ComponentActions(
+                                ComponentAction::WidgetAction(WidgetAction::ServiceNavigatorEvent(
+                                    ServiceNavigatorEvent::UpdateTitle(title),
                                     WidgetType::QueryResultsNavigator,
-                                ))
-                            )
-                        ))).unwrap_or_default();
+                                )),
+                                component_type.clone(),
+                            )))
+                            .unwrap_or_default();
                     }
                     Err(err) => {
                         // Send event with error message
-                        event_sender.send(Event::Tab(TabEvent::ComponentActions(
-                            ComponentActions::CloudWatchComponentActions(
-                                CloudWatchComponentActions::WidgetAction(WidgetAction::ServiceNavigatorEvent(
-                                    ServiceNavigatorEvent::UpdateContent(
-                                        vec![err.to_string()],
-                                    ),
+                        event_sender
+                            .send(Event::Tab(TabEvent::ComponentActions(
+                                ComponentAction::WidgetAction(WidgetAction::ServiceNavigatorEvent(
+                                    ServiceNavigatorEvent::UpdateContent(vec![err.to_string()]),
                                     WidgetType::QueryResultsNavigator,
-                                ))
-                            )
-                        ))).unwrap_or_default();
+                                )),
+                                component_type.clone(),
+                            )))
+                            .unwrap_or_default();
                     }
                 }
-
             });
-                
         }
     }
 
@@ -206,7 +203,7 @@ impl CloudWatch {
 
     /// Updates focus for the time range input and other components
     fn update_time_range_focus(&mut self, activate: bool) {
-        self.time_range_input.set_active(!activate);
+        self.time_range_input.set_active(activate);
         self.base.input.set_active(!activate);
         self.base.navigator.set_active(!activate);
         self.base.results_navigator.set_active(!activate);
@@ -279,9 +276,8 @@ impl AWSComponent for CloudWatch {
                 self.base
                     .event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
-                        ComponentActions::CloudWatchComponentActions(
-                            CloudWatchComponentActions::WidgetAction(signal),
-                        ),
+                        ComponentAction::WidgetAction(signal),
+                        self.component_type.clone(),
                     )))
                     .unwrap();
                 return;
@@ -293,9 +289,8 @@ impl AWSComponent for CloudWatch {
                 self.base
                     .event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
-                        ComponentActions::CloudWatchComponentActions(
-                            CloudWatchComponentActions::NextFocus,
-                        ),
+                        ComponentAction::NextFocus,
+                        self.component_type.clone(),
                     )))
                     .unwrap();
             }
@@ -303,9 +298,8 @@ impl AWSComponent for CloudWatch {
                 self.base
                     .event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
-                        ComponentActions::CloudWatchComponentActions(
-                            CloudWatchComponentActions::PreviousFocus,
-                        ),
+                        ComponentAction::PreviousFocus,
+                        self.component_type.clone(),
                     )))
                     .unwrap();
             }
@@ -347,9 +341,8 @@ impl AWSComponent for CloudWatch {
                     self.base
                         .event_sender
                         .send(Event::Tab(TabEvent::ComponentActions(
-                            ComponentActions::CloudWatchComponentActions(
-                                CloudWatchComponentActions::WidgetAction(signal),
-                            ),
+                            ComponentAction::WidgetAction(signal),
+                            self.component_type.clone(),
                         )))
                         .unwrap();
                 }
@@ -358,10 +351,10 @@ impl AWSComponent for CloudWatch {
     }
 
     /// Processes CloudWatch-specific component actions
-    async fn process_event(&mut self, event: ComponentActions) {
+    async fn process_event(&mut self, event: ComponentAction) {
         match event {
-            ComponentActions::CloudWatchComponentActions(cw_event) => match cw_event {
-                CloudWatchComponentActions::Active(aws_profile) => {
+            cw_event => match cw_event {
+                ComponentAction::Active(aws_profile) => {
                     self.aws_clients =
                         Some(TabClients::new(aws_profile, String::from("eu-west-1")));
 
@@ -387,27 +380,27 @@ impl AWSComponent for CloudWatch {
                         }
                     }
                 }
-                CloudWatchComponentActions::Focused => {
+                ComponentAction::Focused => {
                     // Set the component as inactive
                     self.set_active(true);
                 }
-                CloudWatchComponentActions::Unfocused => {
+                ComponentAction::Unfocused => {
                     if self.get_current_focus() == ComponentFocus::None {
-                        self.reset_focus(); 
+                        self.reset_focus();
                     }
                     // Set the component as inactive
                     self.set_active(false);
                 }
-                CloudWatchComponentActions::FocusedToLast => {
+                ComponentAction::FocusedToLast => {
                     // Set the component as inactive
                 }
 
                 // Handle selection of a log group from the list
-                CloudWatchComponentActions::SelectLogGroup(log_group) => {
+                ComponentAction::SelectLogGroup(log_group) => {
                     self.handle_log_group_selection(log_group).await;
                 }
                 // Handle search/filter request for logs
-                CloudWatchComponentActions::SearchLogs(filter) => {
+                ComponentAction::SearchLogs(filter) => {
                     if let Some(log_group) = &self.selected_log_group {
                         let log_group = log_group.clone();
                         let time_range =
@@ -417,15 +410,15 @@ impl AWSComponent for CloudWatch {
                     }
                 }
                 // Handle time range setting
-                CloudWatchComponentActions::SetTimeRange(time_range) => {
+                ComponentAction::SetTimeRange(time_range) => {
                     self.set_time_range(time_range).await;
                 }
                 // Display detailed view of a log entry
-                CloudWatchComponentActions::ViewLogDetails(log_content) => {
+                ComponentAction::ViewLogDetails(log_content) => {
                     self.view_log_details(&log_content).await;
                 }
                 // Cycle focus forward through widgets
-                CloudWatchComponentActions::NextFocus => {
+                ComponentAction::NextFocus => {
                     // If we're on TimeRange focus, we need special handling
                     if self.base.current_focus == ComponentFocus::TimeRange {
                         self.update_time_range_focus(false);
@@ -446,7 +439,7 @@ impl AWSComponent for CloudWatch {
                     }
                 }
                 // Cycle focus backward through widgets
-                CloudWatchComponentActions::PreviousFocus => {
+                ComponentAction::PreviousFocus => {
                     // If we're on TimeRange focus, we need special handling
                     if self.base.current_focus == ComponentFocus::TimeRange {
                         self.update_time_range_focus(false);
@@ -467,7 +460,7 @@ impl AWSComponent for CloudWatch {
                     }
                 }
                 // Show details in popup window
-                CloudWatchComponentActions::PopupDetails(details) => {
+                ComponentAction::PopupDetails(details) => {
                     self.base
                         .details_popup
                         .set_content(PopupContent::Details(details.clone()));
@@ -475,7 +468,7 @@ impl AWSComponent for CloudWatch {
                     self.base.details_popup.set_active(true);
                 }
                 // Process events from child widgets
-                CloudWatchComponentActions::WidgetAction(widget_action) => match widget_action {
+                ComponentAction::WidgetAction(widget_action) => match widget_action {
                     WidgetAction::ServiceNavigatorEvent(ref _aws_navigator_event, widget_type) => {
                         if widget_type == WidgetType::AWSServiceNavigator {
                             if let Some(signal) =
@@ -492,11 +485,8 @@ impl AWSComponent for CloudWatch {
                                         self.base
                                             .event_sender
                                             .send(Event::Tab(TabEvent::ComponentActions(
-                                                ComponentActions::CloudWatchComponentActions(
-                                                    CloudWatchComponentActions::SelectLogGroup(
-                                                        log_group,
-                                                    ),
-                                                ),
+                                                ComponentAction::SelectLogGroup(log_group),
+                                                self.component_type.clone(),
                                             )))
                                             .unwrap();
                                     }
@@ -521,11 +511,8 @@ impl AWSComponent for CloudWatch {
                                         self.base
                                             .event_sender
                                             .send(Event::Tab(TabEvent::ComponentActions(
-                                                ComponentActions::CloudWatchComponentActions(
-                                                    CloudWatchComponentActions::PopupDetails(
-                                                        log_content,
-                                                    ),
-                                                ),
+                                                ComponentAction::PopupDetails(log_content),
+                                                self.component_type.clone(),
                                             )))
                                             .unwrap();
                                     }
@@ -550,11 +537,8 @@ impl AWSComponent for CloudWatch {
                                             self.base
                                                 .event_sender
                                                 .send(Event::Tab(TabEvent::ComponentActions(
-                                                    ComponentActions::CloudWatchComponentActions(
-                                                        CloudWatchComponentActions::SearchLogs(
-                                                            content,
-                                                        ),
-                                                    ),
+                                                    ComponentAction::SearchLogs(content),
+                                                    self.component_type.clone(),
                                                 )))
                                                 .unwrap();
                                         }
@@ -575,11 +559,8 @@ impl AWSComponent for CloudWatch {
                                         self.base
                                             .event_sender
                                             .send(Event::Tab(TabEvent::ComponentActions(
-                                                ComponentActions::CloudWatchComponentActions(
-                                                    CloudWatchComponentActions::SetTimeRange(
-                                                        content,
-                                                    ),
-                                                ),
+                                                ComponentAction::SetTimeRange(content),
+                                                self.component_type.clone(),
                                             )))
                                             .unwrap();
                                     }
@@ -594,8 +575,8 @@ impl AWSComponent for CloudWatch {
                     }
                     _ => {}
                 },
+                _ => {}
             },
-            _ => {} // Ignore other component actions that don't belong to CloudWatch
         }
     }
 

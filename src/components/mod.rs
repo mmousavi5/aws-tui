@@ -3,7 +3,7 @@ pub(crate) mod cloudwatch;
 pub(crate) mod dynamodb;
 pub(crate) mod s3;
 pub(crate) mod tab;
-use crate::event_managment::event::ComponentActions;
+use crate::event_managment::event::ComponentAction;
 use crossterm::event::KeyEvent;
 use ratatui::{buffer::Buffer, layout::Rect};
 use std::any::Any;
@@ -18,7 +18,7 @@ pub trait AWSComponent: Send {
     fn handle_input(&mut self, key_event: KeyEvent);
 
     /// Process component actions
-    async fn process_event(&mut self, event: ComponentActions);
+    async fn process_event(&mut self, event: ComponentAction);
 
     /// Set active state
     fn set_active(&mut self, active: bool);

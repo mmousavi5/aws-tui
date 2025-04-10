@@ -21,74 +21,53 @@ pub enum Event {
     Tab(TabEvent),
 }
 
+#[derive(Clone)]
+pub enum ComponentType {
+    S3,
+    DynamoDB,
+    CloudWatch,
+}
+
 /// Events related to tab functionality
 #[derive(Clone)]
 pub enum TabEvent {
     TabAction(TabAction),
     WidgetActions(WidgetAction),
-    ComponentActions(ComponentActions),
+    ComponentActions(ComponentAction, ComponentType),
 }
-
-/// Actions for AWS service components
 #[derive(Clone)]
-pub enum ComponentActions {
-    S3ComponentActions(S3ComponentActions),
-    DynamoDBComponentActions(DynamoDBComponentActions),
-    CloudWatchComponentActions(CloudWatchComponentActions),
-}
-
-/// Actions specific to CloudWatch services
-#[derive(Clone)]
-pub enum CloudWatchComponentActions {
+pub enum ComponentAction {
+    // Common actions
     Unfocused,
     FocusedToLast,
     Focused,
     Active(String), // aws profile
+    NextFocus,
+    PreviousFocus,
+    PopupDetails(String),
+    WidgetAction(WidgetAction),
+
+    // Navigation actions
+    ArrowUp,
+    ArrowDown,
+    NavigateUp,
+
+    // CloudWatch specific actions
     SelectLogGroup(String),
     SearchLogs(String),
     ViewLogDetails(String),
-    PopupDetails(String),
     SetTimeRange(String),
-    NextFocus,
-    PreviousFocus,
-    WidgetAction(WidgetAction),
-}
 
-/// Actions specific to S3 services
-#[derive(Clone)]
-pub enum S3ComponentActions {
-    Unfocused,
-    FocusedToLast,
-    Focused,
-    Active(String), // aws profile
-    ArrowUp,
-    ArrowDown,
-    NextFocus,
-    PreviousFocus,
+    // S3 specific actions
     SelectBucket(String),
     NavigateFolder(String),
-    NavigateUp,
     LoadPath(String, String), // bucket, path
-    PopupDetails(String),
-    WidgetAction(WidgetAction),
-}
 
-/// Actions specific to DynamoDB services
-#[derive(Clone)]
-pub enum DynamoDBComponentActions {
-    Unfocused,
-    FocusedToLast,
-    Focused,
-    Active(String), // aws profile
-    ArrowUp,
-    ArrowDown,
-    NextFocus,
-    PreviousFocus,
+    // DynamoDB specific actions
     SetTitle(String),
     SetQuery(String),
-    PopupDetails(String),
-    WidgetActions(WidgetAction),
 }
+
 #[derive(Clone)]
 pub enum InputBoxType {
     Text,
