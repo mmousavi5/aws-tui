@@ -602,22 +602,84 @@ impl AWSComponent for CloudWatch {
     /// Fetches and displays the list of CloudWatch log groups
     async fn update(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(client) = &self.cloudwatch_client {
-            // Clone Arc to avoid borrowing issues
-            let client_clone = Arc::clone(client);
-            let client = client_clone.lock().await;
-            let log_groups = client.list_log_groups().await?;
-            self.base.navigator.set_title(String::from("Log Groups"));
-            self.base
-                .navigator
-                .set_content(NavigatorContent::Records(log_groups));
-
+            // Show loading state immediately
+            self.base.navigator.set_title(String::from("Log Groups (Loading...)"));
+            self.base.navigator.set_content(NavigatorContent::Records(vec![
+                "Fetching log groups, please wait...".to_string()
+            ]));
+            
             // Reset results area
-            self.base
-                .results_navigator
-                .set_content(NavigatorContent::Records(vec![]));
-            self.base
-                .results_navigator
-                .set_title(String::from("Select a log group"));
+            self.base.results_navigator.set_content(NavigatorContent::Records(vec![]));
+            self.base.results_navigator.set_title(String::from("Select a log group"));
+            
+            // Clone what we need for the background task
+            let client_clone = Arc::clone(client);
+            let event_sender = self.base.event_sender.clone();
+            let component_type = self.component_type.clone();
+            
+            // Spawn background task to fetch log groups without blocking UI
+            let _ = tokio::spawn(async move {
+                // Fetch log groups in background
+                let log_groups_result = match tokio::time::timeout(
+                    std::time::Duration::from_secs(30), // 30-second timeout
+                    client_clone.lock().await.list_log_groups(),
+                ).await {
+                    Ok(result) => result,
+                    Err(_) => Ok(vec!["Request timed out after 30 seconds".to_string()]),
+                };
+                
+                // Send event with results back to the component
+                match log_groups_result {
+                    Ok(log_groups) => {
+                        // Send event to update navigator with log groups
+                        event_sender
+                            .send(Event::Tab(TabEvent::ComponentActions(
+                                ComponentAction::WidgetAction(WidgetAction::ServiceNavigatorEvent(
+                                    ServiceNavigatorEvent::UpdateContent(log_groups),
+                                    WidgetType::AWSServiceNavigator,
+                                )),
+                                component_type.clone(),
+                            )))
+                            .unwrap_or_default();
+                        
+                        // Update navigator title
+                        event_sender
+                            .send(Event::Tab(TabEvent::ComponentActions(
+                                ComponentAction::WidgetAction(WidgetAction::ServiceNavigatorEvent(
+                                    ServiceNavigatorEvent::UpdateTitle(String::from("Log Groups")),
+                                    WidgetType::AWSServiceNavigator,
+                                )),
+                                component_type.clone(),
+                            )))
+                            .unwrap_or_default();
+                    },
+                    Err(err) => {
+                        // Send event with error message
+                        event_sender
+                            .send(Event::Tab(TabEvent::ComponentActions(
+                                ComponentAction::WidgetAction(WidgetAction::ServiceNavigatorEvent(
+                                    ServiceNavigatorEvent::UpdateContent(vec![format!(
+                                        "Error fetching log groups: {}", err
+                                    )]),
+                                    WidgetType::AWSServiceNavigator,
+                                )),
+                                component_type.clone(),
+                            )))
+                            .unwrap_or_default();
+                        
+                        // Update navigator title to reflect error
+                        event_sender
+                            .send(Event::Tab(TabEvent::ComponentActions(
+                                ComponentAction::WidgetAction(WidgetAction::ServiceNavigatorEvent(
+                                    ServiceNavigatorEvent::UpdateTitle(String::from("Log Groups (Error)")),
+                                    WidgetType::AWSServiceNavigator,
+                                )),
+                                component_type,
+                            )))
+                            .unwrap_or_default();
+                    },
+                }
+            });
         }
         Ok(())
     }
