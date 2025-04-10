@@ -291,23 +291,10 @@ impl Tab {
                     if let Some(widget) = self.right_widgets.get_mut(&self.active_right_widget) {
                         if widget.get_current_focus() == ComponentFocus::None {
                             self.current_focus = TabFocus::Left;
-                            self.event_sender
-                                .send(Event::Tab(TabEvent::WidgetActions(
-                                    WidgetAction::ServiceNavigatorEvent(
-                                        ServiceNavigatorEvent::Unfocused,
-                                        WidgetType::AWSServiceNavigator,
-                                    ),
-                                )))
-                                .unwrap();
+                            self.forward_unfocus_event_to_component(self.active_right_widget);
                         } else {
-                            self.event_sender
-                                .send(Event::Tab(TabEvent::WidgetActions(
-                                    WidgetAction::ServiceNavigatorEvent(
-                                        ServiceNavigatorEvent::Focused,
-                                        WidgetType::AWSServiceNavigator,
-                                    ),
-                                )))
-                                .unwrap();
+                            // self.forward_focus_event_to_component(self.active_right_widget);
+
                             match self.active_right_widget {
                                 WidgetType::S3 => {
                                     self.event_sender
@@ -434,6 +421,38 @@ impl Tab {
             _ => {}
         }
     }
+
+    pub fn forward_unfocus_event_to_component(&mut self, component: WidgetType) {
+        match component {
+            WidgetType::S3 => {
+                self.event_sender
+                    .send(Event::Tab(TabEvent::ComponentActions(
+                        ComponentActions::S3ComponentActions(S3ComponentActions::Unfocused),
+                    )))
+                    .unwrap();
+            }
+            WidgetType::DynamoDB => {
+                self.event_sender
+                    .send(Event::Tab(TabEvent::ComponentActions(
+                        ComponentActions::DynamoDBComponentActions(
+                            DynamoDBComponentActions::Unfocused,
+                        ),
+                    )))
+                    .unwrap();
+            }
+            WidgetType::CloudWatch => {
+                self.event_sender
+                    .send(Event::Tab(TabEvent::ComponentActions(
+                        ComponentActions::CloudWatchComponentActions(
+                            CloudWatchComponentActions::Unfocused,
+                        ),
+                    )))
+                    .unwrap();
+            }
+            _ => {}
+        }
+    }
+
 
     /// Get the tab's name/title
     pub fn name(&self) -> &str {

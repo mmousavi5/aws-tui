@@ -127,6 +127,8 @@ pub enum PopupAction {
 /// Events for AWS service navigation
 #[derive(Clone)]
 pub enum ServiceNavigatorEvent {
+    UpdateContent(Vec<String>), // tile, content
+    UpdateTitle(String),
     Unfocused,
     Focused,
     ItemSelected(WidgetEventType),

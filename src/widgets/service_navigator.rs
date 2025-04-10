@@ -597,6 +597,17 @@ impl WidgetExt for ServiceNavigator {
                     }
                     None
                 }
+                ServiceNavigatorEvent::UpdateContent(content) => {
+                    // Update content and apply existing filter
+                    self.set_content(NavigatorContent::Records(content));
+                    self.filter_mode = false; // Reset filter mode
+                    // self.set_title(title);
+                    None
+                }
+                ServiceNavigatorEvent::UpdateTitle(title) => {
+                    self.set_title(title);
+                    None
+                }
                 ServiceNavigatorEvent::Backspace => {
                     if self.filter_mode {
                         self.remove_from_filter();

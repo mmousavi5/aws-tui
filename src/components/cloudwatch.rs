@@ -75,6 +75,9 @@ impl CloudWatch {
     /// Fetches logs with the specified parameters and updates the UI
     ///
     /// Consolidates the previous separate log fetching methods into one
+    /// Fetches logs with the specified parameters and updates the UI
+    ///
+    /// Uses background task to prevent UI blocking
     async fn fetch_logs(
         &mut self,
         log_group: &str,
@@ -83,35 +86,99 @@ impl CloudWatch {
         title_prefix: &str,
     ) {
         if let Some(client_ref) = &self.cloudwatch_client {
-            // Clone the client to avoid borrowing issues
-            let client_clone = Arc::clone(client_ref);
-
+            // Show loading state immediately
             let title = if filter_pattern.is_empty() {
-                title_prefix.to_string()
+                format!("{} (Loading...)", title_prefix)
             } else {
-                format!("{}: {}", title_prefix, filter_pattern)
+                format!("{}: {} (Loading...)", title_prefix, filter_pattern)
             };
+            
+            self.base.event_sender.send(Event::Tab(TabEvent::ComponentActions(
+                ComponentActions::CloudWatchComponentActions(
+                    CloudWatchComponentActions::WidgetAction(WidgetAction::ServiceNavigatorEvent(
+                        ServiceNavigatorEvent::UpdateTitle(
+                            title,
+                        ),
+                        WidgetType::QueryResultsNavigator,
+                    ))
+                )
+            ))).unwrap_or_default();
+            self.base.event_sender.send(Event::Tab(TabEvent::ComponentActions(
+                ComponentActions::CloudWatchComponentActions(
+                    CloudWatchComponentActions::WidgetAction(WidgetAction::ServiceNavigatorEvent(
+                        ServiceNavigatorEvent::UpdateContent(
+                            vec!["Fetching logs, please wait...".to_string()],
+                        ),
+                        WidgetType::QueryResultsNavigator,
+                    ))
+                )
+            ))).unwrap_or_default();
+            
+            // Clone what we need for the background task
+            let client_clone = Arc::clone(client_ref);
+            let log_group = log_group.to_string();
+            let filter_pattern = filter_pattern.to_string();
+            let time_range = time_range.to_string();
+            let event_sender = self.base.event_sender.clone();
+            let title = title_prefix.to_string();
+            
+            // Spawn background task to fetch logs without blocking UI
+            let _ = tokio::spawn(async move {
+                // Fetch logs in background
 
-            self.base.results_navigator.set_title(title);
+                let logs_result = match tokio::time::timeout(
+                    std::time::Duration::from_secs(330), // 30-second timeout
+                    client_clone.lock().await.list_log_events(
+                        &log_group,
+                        &filter_pattern,
+                        Some(&time_range)
+                    )
+                ).await {
+                    Ok(result) => result,
+                    Err(_) => Ok(vec!["Request timed out after 30 seconds".to_string()]),
+                };
+                // Send event with results back to the component
+                match logs_result {
+                    Ok(logs) => {
+                        // Send event with logs
+                        event_sender.send(Event::Tab(TabEvent::ComponentActions(
+                            ComponentActions::CloudWatchComponentActions(
+                                CloudWatchComponentActions::WidgetAction(WidgetAction::ServiceNavigatorEvent(
+                                    ServiceNavigatorEvent::UpdateContent(
+                                        logs,
+                                    ),
+                                    WidgetType::QueryResultsNavigator,
+                                ))
+                            )
+                        ))).unwrap_or_default();
+                        event_sender.send(Event::Tab(TabEvent::ComponentActions(
+                            ComponentActions::CloudWatchComponentActions(
+                                CloudWatchComponentActions::WidgetAction(WidgetAction::ServiceNavigatorEvent(
+                                    ServiceNavigatorEvent::UpdateTitle(
+                                        title,
+                                    ),
+                                    WidgetType::QueryResultsNavigator,
+                                ))
+                            )
+                        ))).unwrap_or_default();
+                    }
+                    Err(err) => {
+                        // Send event with error message
+                        event_sender.send(Event::Tab(TabEvent::ComponentActions(
+                            ComponentActions::CloudWatchComponentActions(
+                                CloudWatchComponentActions::WidgetAction(WidgetAction::ServiceNavigatorEvent(
+                                    ServiceNavigatorEvent::UpdateContent(
+                                        vec![err.to_string()],
+                                    ),
+                                    WidgetType::QueryResultsNavigator,
+                                ))
+                            )
+                        ))).unwrap_or_default();
+                    }
+                }
 
-            let logs = client_clone
-                .lock()
-                .await
-                .list_log_events(log_group, filter_pattern, Some(time_range))
-                .await;
-            match logs {
-                Ok(logs) => {
-                    self.base
-                        .results_navigator
-                        .set_content(NavigatorContent::Records(logs));
-                }
-                Err(err) => {
-                    // Handle error (e.g., show error message in the results navigator)
-                    self.base
-                        .results_navigator
-                        .set_content(NavigatorContent::Records(vec![err.to_string()]));
-                }
-            }
+            });
+                
         }
     }
 
@@ -139,7 +206,7 @@ impl CloudWatch {
 
     /// Updates focus for the time range input and other components
     fn update_time_range_focus(&mut self, activate: bool) {
-        self.time_range_input.set_active(activate);
+        self.time_range_input.set_active(!activate);
         self.base.input.set_active(!activate);
         self.base.navigator.set_active(!activate);
         self.base.results_navigator.set_active(!activate);
@@ -325,7 +392,9 @@ impl AWSComponent for CloudWatch {
                     self.set_active(true);
                 }
                 CloudWatchComponentActions::Unfocused => {
-                    self.reset_focus();
+                    if self.get_current_focus() == ComponentFocus::None {
+                        self.reset_focus(); 
+                    }
                     // Set the component as inactive
                     self.set_active(false);
                 }
