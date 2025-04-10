@@ -4,6 +4,7 @@ use crate::event_managment::event::{
     CloudWatchComponentActions, ComponentActions, Event, InputBoxEvent, InputBoxType,
     ServiceNavigatorEvent, TabEvent, WidgetAction, WidgetEventType, WidgetType,
 };
+use crate::services::aws::TabClients;
 use crate::services::aws::cloudwatch_client::CloudWatchClient;
 use crate::widgets::WidgetExt;
 use crate::widgets::input_box::InputBoxWidget;
@@ -30,6 +31,8 @@ pub struct CloudWatch {
     time_range_input: InputBoxWidget,
     /// Current time range value
     time_range: Option<String>,
+    /// AWS service client
+    aws_clients: Option<TabClients>,
 }
 
 impl CloudWatch {
@@ -45,6 +48,7 @@ impl CloudWatch {
                 false,
             ),
             time_range: None,
+            aws_clients: None,
         }
     }
 
@@ -290,6 +294,45 @@ impl AWSComponent for CloudWatch {
     async fn process_event(&mut self, event: ComponentActions) {
         match event {
             ComponentActions::CloudWatchComponentActions(cw_event) => match cw_event {
+                CloudWatchComponentActions::Active(aws_profile) => {
+                    self.aws_clients =
+                        Some(TabClients::new(aws_profile, String::from("eu-west-1")));
+
+                    // Unwrap the Result and handle errors properly
+                    if let Some(clients) = &mut self.aws_clients {
+                        match clients.get_cloudwatch_client().await {
+                            Ok(client) => {
+                                self.cloudwatch_client = Some(client);
+                                self.update().await.ok();
+                            }
+                            Err(err) => {
+                                // Handle the error (show error in UI)
+                                self.base
+                                    .results_navigator
+                                    .set_title(String::from("Error connecting to CloudWatch"));
+                                self.base
+                                    .results_navigator
+                                    .set_content(NavigatorContent::Records(vec![format!(
+                                        "Failed to initialize CloudWatch client: {}",
+                                        err
+                                    )]));
+                            }
+                        }
+                    }
+                }
+                CloudWatchComponentActions::Focused => {
+                    // Set the component as inactive
+                    self.set_active(true);
+                }
+                CloudWatchComponentActions::Unfocused => {
+                    self.reset_focus();
+                    // Set the component as inactive
+                    self.set_active(false);
+                }
+                CloudWatchComponentActions::FocusedToLast => {
+                    // Set the component as inactive
+                }
+
                 // Handle selection of a log group from the list
                 CloudWatchComponentActions::SelectLogGroup(log_group) => {
                     self.handle_log_group_selection(log_group).await;

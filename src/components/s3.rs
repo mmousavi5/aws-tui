@@ -4,6 +4,7 @@ use crate::event_managment::event::{
     ComponentActions, Event, InputBoxEvent, S3ComponentActions, ServiceNavigatorEvent, TabEvent,
     WidgetAction, WidgetEventType, WidgetType,
 };
+use crate::services::aws::TabClients;
 use crate::services::aws::s3_client::S3Client;
 use crate::widgets::WidgetExt;
 use crate::widgets::popup::PopupContent;
@@ -27,6 +28,8 @@ pub struct S3Component {
     current_path: String,
     /// Currently selected S3 bucket name
     selected_bucket: Option<String>,
+    /// AWS service client
+    aws_clients: Option<TabClients>,
 }
 
 impl S3Component {
@@ -37,6 +40,7 @@ impl S3Component {
             s3_client: None,
             current_path: String::new(),
             selected_bucket: None,
+            aws_clients: None,
         }
     }
 
@@ -254,6 +258,46 @@ impl AWSComponent for S3Component {
         match event {
             ComponentActions::S3ComponentActions(s3_event) => match s3_event {
                 // Handle bucket selection
+                S3ComponentActions::Active(aws_profile) => {
+                    self.aws_clients =
+                        Some(TabClients::new(aws_profile, String::from("eu-west-1")));
+
+                    // Unwrap the Result and handle errors properly
+                    if let Some(clients) = &mut self.aws_clients {
+                        match clients.get_s3_client().await {
+                            Ok(client) => {
+                                self.s3_client = Some(client);
+                                self.update().await.ok();
+                            }
+                            Err(err) => {
+                                // Handle the error (show error in UI)
+                                self.base
+                                    .results_navigator
+                                    .set_title(String::from("Error connecting to CloudWatch"));
+                                self.base
+                                    .results_navigator
+                                    .set_content(NavigatorContent::Records(vec![format!(
+                                        "Failed to initialize CloudWatch client: {}",
+                                        err
+                                    )]));
+                            }
+                        }
+                    }
+                }
+
+                S3ComponentActions::Focused => {
+                    // Set the component as inactive
+                    self.set_active(false);
+                }
+                S3ComponentActions::Unfocused => {
+                    self.reset_focus();
+                    // Set the component as inactive
+                    self.set_active(false);
+                }
+                S3ComponentActions::FocusedToLast => {
+                    // Set the component as inactive
+                }
+
                 S3ComponentActions::SelectBucket(bucket) => {
                     self.handle_bucket_selection(bucket).await;
                 }

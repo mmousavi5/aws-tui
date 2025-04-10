@@ -40,6 +40,10 @@ pub enum ComponentActions {
 /// Actions specific to CloudWatch services
 #[derive(Clone)]
 pub enum CloudWatchComponentActions {
+    Unfocused,
+    FocusedToLast,
+    Focused,
+    Active(String), // aws profile
     SelectLogGroup(String),
     SearchLogs(String),
     ViewLogDetails(String),
@@ -53,6 +57,10 @@ pub enum CloudWatchComponentActions {
 /// Actions specific to S3 services
 #[derive(Clone)]
 pub enum S3ComponentActions {
+    Unfocused,
+    FocusedToLast,
+    Focused,
+    Active(String), // aws profile
     ArrowUp,
     ArrowDown,
     NextFocus,
@@ -68,6 +76,10 @@ pub enum S3ComponentActions {
 /// Actions specific to DynamoDB services
 #[derive(Clone)]
 pub enum DynamoDBComponentActions {
+    Unfocused,
+    FocusedToLast,
+    Focused,
+    Active(String), // aws profile
     ArrowUp,
     ArrowDown,
     NextFocus,
@@ -115,6 +127,8 @@ pub enum PopupAction {
 /// Events for AWS service navigation
 #[derive(Clone)]
 pub enum ServiceNavigatorEvent {
+    Unfocused,
+    Focused,
     ItemSelected(WidgetEventType),
     FilterTextChanged(String),
     ArrowUp,

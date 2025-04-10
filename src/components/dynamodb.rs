@@ -4,6 +4,7 @@ use crate::event_managment::event::{
     ComponentActions, DynamoDBComponentActions, Event, InputBoxEvent, ServiceNavigatorEvent,
     TabEvent, WidgetAction, WidgetEventType, WidgetType,
 };
+use crate::services::aws::TabClients;
 use crate::services::aws::dynamo_client::DynamoDBClient;
 use crate::widgets::WidgetExt;
 use crate::widgets::popup::PopupContent;
@@ -20,6 +21,8 @@ pub struct DynamoDB {
     base: AWSComponentBase,
     /// Client for DynamoDB API interactions
     dynamodb_client: Option<Arc<Mutex<DynamoDBClient>>>,
+    /// AWS service client
+    aws_clients: Option<TabClients>,
 }
 
 impl DynamoDB {
@@ -28,6 +31,7 @@ impl DynamoDB {
         Self {
             base: AWSComponentBase::new(event_sender.clone(), NavigatorContent::Records(vec![])),
             dynamodb_client: None,
+            aws_clients: None,
         }
     }
 
@@ -131,6 +135,42 @@ impl AWSComponent for DynamoDB {
     /// Processes component-specific actions
     async fn process_event(&mut self, event: ComponentActions) {
         match event {
+            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::Active(
+                aws_profile,
+            )) => {
+                self.aws_clients = Some(TabClients::new(aws_profile, String::from("eu-west-1")));
+
+                // Unwrap the Result and handle errors properly
+                if let Some(clients) = &mut self.aws_clients {
+                    match clients.get_dynamodb_client().await {
+                        Ok(client) => {
+                            self.dynamodb_client = Some(client);
+                            self.update().await.ok();
+                        }
+                        Err(err) => {
+                            // Handle the error (show error in UI)
+                            self.base
+                                .results_navigator
+                                .set_title(String::from("Error connecting to CloudWatch"));
+                            self.base
+                                .results_navigator
+                                .set_content(NavigatorContent::Records(vec![format!(
+                                    "Failed to initialize CloudWatch client: {}",
+                                    err
+                                )]));
+                        }
+                    }
+                }
+            }
+            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::Focused) => {
+                self.set_active(true);
+            }
+            ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::Unfocused) => {
+                self.reset_focus();
+                // Set the component as inactive
+                self.set_active(false);
+            }
+
             // Handle selection of a table
             ComponentActions::DynamoDBComponentActions(DynamoDBComponentActions::SetTitle(
                 title,

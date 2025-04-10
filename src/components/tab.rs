@@ -27,6 +27,7 @@ use ratatui::{
     widgets::{Block, BorderType, Paragraph, Tabs, Widget},
 };
 use std::collections::HashMap;
+use tokio::process;
 
 // Constants
 const TAB_HEIGHT: u16 = 3;
@@ -156,82 +157,86 @@ impl Tab {
     /// Processes tab events and routes them to appropriate handlers
     pub async fn process_event(&mut self, tab_event: TabEvent) {
         match tab_event {
+            // Handle tab-level actions like focus changes and profile selection
             TabEvent::TabAction(tab_action) => {
                 self.process_tab_action(tab_action).await;
             }
-            TabEvent::WidgetActions(widget_action) => match widget_action {
-                WidgetAction::PopupAction(ref _popup_event) => {
-                    if let Some(popup) = self.popup_widget.as_mut() {
-                        if self.popup_mod {
-                            if let Some(signal) = popup.process_event(widget_action) {
-                                match signal {
-                                    WidgetAction::PopupAction(PopupAction::ItemSelected(
-                                        selected,
-                                    )) => {
-                                        self.event_sender
-                                            .send(Event::Tab(TabEvent::TabAction(
-                                                TabAction::SelectProfile(selected),
-                                            )))
-                                            .unwrap();
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        }
-                    }
-                }
-                WidgetAction::ServiceNavigatorEvent(ref _aws_navigator_event, _) => {
-                    if let Some(signal) = self.left_widgets.process_event(widget_action) {
-                        match signal {
-                            WidgetAction::ServiceNavigatorEvent(
-                                ServiceNavigatorEvent::ItemSelected(selected),
-                                _widget_type,
-                            ) => {
-                                self.event_sender
-                                    .send(Event::Tab(TabEvent::TabAction(
-                                        TabAction::SelectService(selected),
-                                    )))
-                                    .unwrap();
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-                _ => {}
-            },
+            TabEvent::WidgetActions(widget_action) => {
+                self.process_widget_action(widget_action).await;
+            }
             TabEvent::ComponentActions(component_action) => {
                 // Route component actions to the appropriate component based on type
-                match component_action {
-                    ComponentActions::S3ComponentActions(_)
-                        if self.active_right_widget == WidgetType::S3 =>
-                    {
-                        if let Some(widget) = self.right_widgets.get_mut(&WidgetType::S3) {
-                            widget.process_event(component_action).await;
-                        }
-                    }
-                    ComponentActions::DynamoDBComponentActions(_)
-                        if self.active_right_widget == WidgetType::DynamoDB =>
-                    {
-                        if let Some(widget) = self.right_widgets.get_mut(&WidgetType::DynamoDB) {
-                            widget.process_event(component_action).await;
-                        }
-                    }
-                    ComponentActions::CloudWatchComponentActions(_)
-                        if self.active_right_widget == WidgetType::CloudWatch =>
-                    {
-                        if let Some(widget) = self.right_widgets.get_mut(&WidgetType::CloudWatch) {
-                            widget.process_event(component_action).await;
-                        }
-                    }
-                    // Handle generic component actions that aren't specific to a component type
-                    _ => {
-                        if let Some(widget) = self.right_widgets.get_mut(&self.active_right_widget)
-                        {
-                            widget.process_event(component_action).await;
+                self.process_component_action(component_action).await;
+            }
+        }
+    }
+
+    pub async fn process_component_action(&mut self, component_action: ComponentActions) {
+        match component_action {
+            ComponentActions::S3ComponentActions(_)
+                if self.active_right_widget == WidgetType::S3 =>
+            {
+                if let Some(widget) = self.right_widgets.get_mut(&WidgetType::S3) {
+                    widget.process_event(component_action).await;
+                }
+            }
+            ComponentActions::DynamoDBComponentActions(_)
+                if self.active_right_widget == WidgetType::DynamoDB =>
+            {
+                if let Some(widget) = self.right_widgets.get_mut(&WidgetType::DynamoDB) {
+                    widget.process_event(component_action).await;
+                }
+            }
+            ComponentActions::CloudWatchComponentActions(_)
+                if self.active_right_widget == WidgetType::CloudWatch =>
+            {
+                if let Some(widget) = self.right_widgets.get_mut(&WidgetType::CloudWatch) {
+                    widget.process_event(component_action).await;
+                }
+            }
+            // Handle generic component actions that aren't specific to a component type
+            _ => {}
+        }
+    }
+
+    pub async fn process_widget_action(&mut self, widget_action: WidgetAction) {
+        match widget_action {
+            WidgetAction::PopupAction(ref _popup_event) => {
+                if let Some(popup) = self.popup_widget.as_mut() {
+                    if self.popup_mod {
+                        if let Some(signal) = popup.process_event(widget_action) {
+                            match signal {
+                                WidgetAction::PopupAction(PopupAction::ItemSelected(selected)) => {
+                                    self.event_sender
+                                        .send(Event::Tab(TabEvent::TabAction(
+                                            TabAction::SelectProfile(selected),
+                                        )))
+                                        .unwrap();
+                                }
+                                _ => {}
+                            }
                         }
                     }
                 }
             }
+            WidgetAction::ServiceNavigatorEvent(ref _aws_navigator_event, _) => {
+                if let Some(signal) = self.left_widgets.process_event(widget_action) {
+                    match signal {
+                        WidgetAction::ServiceNavigatorEvent(
+                            ServiceNavigatorEvent::ItemSelected(selected),
+                            _widget_type,
+                        ) => {
+                            self.event_sender
+                                .send(Event::Tab(TabEvent::TabAction(TabAction::SelectService(
+                                    selected,
+                                ))))
+                                .unwrap();
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
         }
     }
 
@@ -246,34 +251,33 @@ impl Tab {
             TabAction::SelectService(service) => match service {
                 WidgetEventType::DynamoDB => {
                     self.active_right_widget = WidgetType::DynamoDB;
-                    if let Some(widget) = self.right_widgets.get_mut(&WidgetType::DynamoDB) {
-                        if let Ok(client) = self.aws_clients.get_dynamodb_client().await {
-                            let dynamo = widget.as_any_mut().downcast_mut::<DynamoDB>().unwrap();
-                            dynamo.set_client(client);
-                            widget.update().await.ok();
-                        }
-                    }
+                    self.event_sender
+                        .send(Event::Tab(TabEvent::ComponentActions(
+                            ComponentActions::DynamoDBComponentActions(
+                                DynamoDBComponentActions::Active(self.name.clone()),
+                            ),
+                        )))
+                        .unwrap();
                 }
                 WidgetEventType::S3 => {
                     self.active_right_widget = WidgetType::S3;
-                    if let Some(widget) = self.right_widgets.get_mut(&WidgetType::S3) {
-                        if let Ok(client) = self.aws_clients.get_s3_client().await {
-                            let s3 = widget.as_any_mut().downcast_mut::<S3Component>().unwrap();
-                            s3.set_client(client);
-                            widget.update().await.ok();
-                        }
-                    }
+                    self.event_sender
+                        .send(Event::Tab(TabEvent::ComponentActions(
+                            ComponentActions::S3ComponentActions(S3ComponentActions::Active(
+                                self.name.clone(),
+                            )),
+                        )))
+                        .unwrap();
                 }
                 WidgetEventType::CloudWatch => {
                     self.active_right_widget = WidgetType::CloudWatch;
-                    if let Some(widget) = self.right_widgets.get_mut(&WidgetType::CloudWatch) {
-                        if let Ok(client) = self.aws_clients.get_cloudwatch_client().await {
-                            let cloudwatch =
-                                widget.as_any_mut().downcast_mut::<CloudWatch>().unwrap();
-                            cloudwatch.set_client(client);
-                            widget.update().await.ok();
-                        }
-                    }
+                    self.event_sender
+                        .send(Event::Tab(TabEvent::ComponentActions(
+                            ComponentActions::CloudWatchComponentActions(
+                                CloudWatchComponentActions::Active(self.name.clone()),
+                            ),
+                        )))
+                        .unwrap();
                 }
                 _ => {}
             },
@@ -282,17 +286,28 @@ impl Tab {
                 if self.current_focus == TabFocus::Left {
                     self.current_focus = TabFocus::Right;
                     // Activate the right widget when switching to it
-                    if let Some(widget) = self.right_widgets.get_mut(&self.active_right_widget) {
-                        widget.set_active(true);
-                    }
+                    self.forward_focus_event_to_component(self.active_right_widget);
                 } else {
                     if let Some(widget) = self.right_widgets.get_mut(&self.active_right_widget) {
                         if widget.get_current_focus() == ComponentFocus::None {
                             self.current_focus = TabFocus::Left;
-                            widget.reset_focus();
-                            widget.set_active(false);
+                            self.event_sender
+                                .send(Event::Tab(TabEvent::WidgetActions(
+                                    WidgetAction::ServiceNavigatorEvent(
+                                        ServiceNavigatorEvent::Unfocused,
+                                        WidgetType::AWSServiceNavigator,
+                                    ),
+                                )))
+                                .unwrap();
                         } else {
-                            widget.set_active(true);
+                            self.event_sender
+                                .send(Event::Tab(TabEvent::WidgetActions(
+                                    WidgetAction::ServiceNavigatorEvent(
+                                        ServiceNavigatorEvent::Focused,
+                                        WidgetType::AWSServiceNavigator,
+                                    ),
+                                )))
+                                .unwrap();
                             match self.active_right_widget {
                                 WidgetType::S3 => {
                                     self.event_sender
@@ -367,7 +382,14 @@ impl Tab {
                         } else {
                             // Go back to left component
                             self.current_focus = TabFocus::Left;
-                            widget.set_active(false);
+                            self.event_sender
+                                .send(Event::Tab(TabEvent::WidgetActions(
+                                    WidgetAction::ServiceNavigatorEvent(
+                                        ServiceNavigatorEvent::Unfocused,
+                                        WidgetType::AWSServiceNavigator,
+                                    ),
+                                )))
+                                .unwrap();
                         }
                     }
                 } else {
@@ -379,6 +401,37 @@ impl Tab {
                     }
                 }
             }
+        }
+    }
+
+    pub fn forward_focus_event_to_component(&mut self, component: WidgetType) {
+        match component {
+            WidgetType::S3 => {
+                self.event_sender
+                    .send(Event::Tab(TabEvent::ComponentActions(
+                        ComponentActions::S3ComponentActions(S3ComponentActions::Focused),
+                    )))
+                    .unwrap();
+            }
+            WidgetType::DynamoDB => {
+                self.event_sender
+                    .send(Event::Tab(TabEvent::ComponentActions(
+                        ComponentActions::DynamoDBComponentActions(
+                            DynamoDBComponentActions::Focused,
+                        ),
+                    )))
+                    .unwrap();
+            }
+            WidgetType::CloudWatch => {
+                self.event_sender
+                    .send(Event::Tab(TabEvent::ComponentActions(
+                        ComponentActions::CloudWatchComponentActions(
+                            CloudWatchComponentActions::Focused,
+                        ),
+                    )))
+                    .unwrap();
+            }
+            _ => {}
         }
     }
 
