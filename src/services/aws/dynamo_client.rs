@@ -216,56 +216,6 @@ impl DynamoDBClient {
         Ok(output.table_names().to_vec())
     }
 
-    /// Queries a DynamoDB table by its partition key
-    ///
-    /// # Parameters
-    /// * `table_name` - Name of the table to query
-    /// * `partition_key_value` - Value of the partition key to search for
-    ///
-    /// # Returns
-    /// A vector of JSON strings representing the items found
-    pub async fn query_table(
-        &self,
-        table_name: String,
-        partition_key_value: String,
-    ) -> Result<Vec<String>, DynamoDBClientError> {
-        // First get the primary key name for this table
-        let primary_key = self.get_table_primary_key(table_name.as_str()).await?;
-
-        // Create attribute value for query parameter
-        let attr_value = AttributeValue::S(partition_key_value);
-        let mut expression_attribute_values = std::collections::HashMap::new();
-        expression_attribute_values.insert(String::from(":pk"), attr_value);
-
-        // Execute the query with key condition expression
-        let output = self
-            .client
-            .query()
-            .table_name(table_name)
-            .key_condition_expression(format!("{} = :pk", primary_key))
-            .set_expression_attribute_values(Some(expression_attribute_values))
-            .send()
-            .await?;
-
-        // Convert DynamoDB items to JSON strings
-        let items = output
-            .items()
-            .iter()
-            .filter_map(|item| {
-                // Map each item's attributes to JSON
-                let json_value: Value = item
-                    .iter()
-                    .map(|(k, v)| (k.clone(), DynamoDBClient::attribute_to_json(v)))
-                    .collect();
-
-                // Serialize to JSON string, ignoring errors
-                serde_json::to_string(&json_value).ok()
-            })
-            .collect();
-
-        Ok(items)
-    }
-
     /// Converts a DynamoDB AttributeValue to a serde JSON Value
     ///
     /// Currently handles String, Number, and Boolean types

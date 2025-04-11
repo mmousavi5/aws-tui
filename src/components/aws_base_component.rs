@@ -4,10 +4,6 @@ use crate::widgets::WidgetExt;
 use crate::widgets::input_box::InputBoxWidget;
 use crate::widgets::popup::{PopupContent, PopupWidget};
 use crate::widgets::service_navigator::{NavigatorContent, ServiceNavigator};
-use ratatui::{
-    buffer::Buffer,
-    layout::{Constraint, Direction, Layout, Rect},
-};
 
 /// Base component providing common functionality for all AWS service components
 pub struct AWSComponentBase {
@@ -62,41 +58,6 @@ impl AWSComponentBase {
             selected_query: None,
         }
     }
-
-    /// Renders the component with standard three-panel layout
-    pub fn render(&self, area: Rect, buf: &mut Buffer) {
-        if !self.visible {
-            return;
-        }
-
-        // Create a horizontal split for left and right panels
-        let horizontal_split = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Percentage(30), // Left panel - navigator list
-                Constraint::Percentage(70), // Right panel
-            ])
-            .split(area);
-
-        // Create a vertical split for the right panel
-        let right_vertical_split = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Percentage(15), // Input box
-                Constraint::Percentage(85), // Results
-            ])
-            .split(horizontal_split[1]);
-
-        // Render components
-        self.navigator.render(horizontal_split[0], buf);
-        self.input.render(right_vertical_split[0], buf);
-        self.results_navigator.render(right_vertical_split[1], buf);
-
-        if self.details_popup.is_visible() {
-            self.details_popup.render(area, buf);
-        }
-    }
-
     /// Updates active states of all widgets based on current focus
     pub fn update_widget_states(&mut self) {
         self.navigator
