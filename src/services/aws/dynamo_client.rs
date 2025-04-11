@@ -102,6 +102,111 @@ impl DynamoDBClient {
         Ok(primary_key.attribute_name().to_string())
     }
 
+    /// Retrieves the sort key (range key) name for a DynamoDB table if it exists
+    ///
+    /// # Parameters
+    /// * `table_name` - Name of the table to get the sort key for
+    ///
+    /// # Returns
+    /// The name of the sort key attribute as an Option<String>
+    pub async fn get_table_sort_key(
+        &self,
+        table_name: &str,
+    ) -> Result<Option<String>, DynamoDBClientError> {
+        // Get table description from AWS
+        let result = self
+            .client
+            .describe_table()
+            .table_name(table_name)
+            .send()
+            .await?;
+
+        // Extract table schema from response
+        let table = result
+            .table()
+            .ok_or(DynamoDBClientError::NoPrimaryKeyFound)?;
+
+        let key_schema = table.key_schema();
+        
+        // Find the RANGE key (sort key) in the key schema
+        let sort_key = key_schema
+            .iter()
+            .find(|k| k.key_type().as_str() == "RANGE")
+            .map(|k| k.attribute_name().to_string());
+
+        Ok(sort_key)
+    }
+
+        /// Queries a DynamoDB table by its composite key (partition key + optional sort key)
+    ///
+    /// # Parameters
+    /// * `table_name` - Name of the table to query
+    /// * `partition_key_value` - Value of the partition key to search for
+    /// * `sort_key_value` - Optional value of the sort key for refinement
+    ///
+    /// # Returns
+    /// A vector of JSON strings representing the items found
+    pub async fn query_table_composite(
+        &self,
+        table_name: String,
+        partition_key_value: String,
+        sort_key_value: Option<String>,
+    ) -> Result<Vec<String>, DynamoDBClientError> {
+        // First get the primary key name for this table
+        let partition_key = self.get_table_primary_key(table_name.as_str()).await?;
+        
+        // Create attribute value for query parameter
+        let pk_attr_value = AttributeValue::S(partition_key_value);
+        let mut expression_attribute_values = std::collections::HashMap::new();
+        expression_attribute_values.insert(String::from(":pk"), pk_attr_value);
+        
+        // Create the key condition expression
+        let mut key_condition_expr = format!("{} = :pk", partition_key);
+        
+        // If sort key value is provided, add it to the query
+        if let Some(sort_value) = sort_key_value {
+            if !sort_value.is_empty() {
+                // Get the sort key name
+                if let Ok(Some(sort_key)) = self.get_table_sort_key(table_name.as_str()).await {
+                    // Only add sort key condition if we found a sort key for this table
+                    let sk_attr_value = AttributeValue::S(sort_value);
+                    expression_attribute_values.insert(String::from(":sk"), sk_attr_value);
+                    
+                    // Append sort key condition to expression
+                    key_condition_expr = format!("{} AND {} = :sk", key_condition_expr, sort_key);
+                }
+            }
+        }
+
+        // Execute the query with key condition expression
+        let output = self
+            .client
+            .query()
+            .table_name(table_name)
+            .key_condition_expression(key_condition_expr)
+            .set_expression_attribute_values(Some(expression_attribute_values))
+            .send()
+            .await?;
+
+        // Convert DynamoDB items to JSON strings
+        let items = output
+            .items()
+            .iter()
+            .filter_map(|item| {
+                // Map each item's attributes to JSON
+                let json_value: Value = item
+                    .iter()
+                    .map(|(k, v)| (k.clone(), DynamoDBClient::attribute_to_json(v)))
+                    .collect();
+
+                // Serialize to JSON string, ignoring errors
+                serde_json::to_string(&json_value).ok()
+            })
+            .collect();
+
+        Ok(items)
+    }
+
     /// Lists all DynamoDB tables in the account and region
     ///
     /// # Returns

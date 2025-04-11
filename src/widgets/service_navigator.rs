@@ -452,18 +452,12 @@ impl WidgetExt for ServiceNavigator {
                 KeyCode::Char('f') if key_event.modifiers.contains(KeyModifiers::CONTROL) => {
                     // Enter filter mode with Ctrl+F
                     self.filter_mode = true;
-                    Some(WidgetAction::ServiceNavigatorEvent(
-                        ServiceNavigatorEvent::Enter,
-                        self.widget_type.clone(),
-                    ))
+                    None
                 }
                 KeyCode::Char('/') => {
                     // Alternative way to enter filter mode
                     self.filter_mode = true;
-                    Some(WidgetAction::ServiceNavigatorEvent(
-                        ServiceNavigatorEvent::Enter,
-                        self.widget_type.clone(),
-                    ))
+                    None
                 }
                 KeyCode::Esc => {
                     // Clear filter with escape when not in filter mode

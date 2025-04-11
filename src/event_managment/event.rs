@@ -72,6 +72,7 @@ pub enum ComponentAction {
 pub enum InputBoxType {
     Text,
     TimeRange,
+    SortKey,
 }
 /// Actions that can be performed on widgets
 #[derive(Clone)]

@@ -566,6 +566,7 @@ impl AWSComponent for CloudWatch {
                                     }
                                 }
                             }
+                            _ => {}
                         }
                     }
                     // Close popup when exit event received
