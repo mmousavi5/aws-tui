@@ -187,6 +187,26 @@ impl ServiceNavigator {
         self.selected_index = 0;
         self.scroll_offset = 0;
     }
+    pub fn update_content(&mut self, content: NavigatorContent) {
+        self.content = match (&self.content, &content) {
+            (NavigatorContent::Services(existing), NavigatorContent::Services(new)) => {
+                NavigatorContent::Services([existing.clone(), new.clone()].concat())
+            }
+            (NavigatorContent::Records(existing), NavigatorContent::Records(new)) => {
+                NavigatorContent::Records([existing.clone(), new.clone()].concat())
+            }
+            _ => self.content.clone(), // Handle mismatched types gracefully
+        };
+        // Apply existing filter to new content
+        if !self.filter_text.is_empty() {
+            let filter_text_clone = self.filter_text.clone();
+            self.apply_filter(&filter_text_clone);
+        } else {
+            self.filtered_content = content;
+        }
+        self.selected_index = 0;
+        self.scroll_offset = 0;
+    }
 }
 
 impl WidgetExt for ServiceNavigator {
@@ -591,9 +611,13 @@ impl WidgetExt for ServiceNavigator {
                     }
                     None
                 }
-                ServiceNavigatorEvent::UpdateContent(content) => {
+                ServiceNavigatorEvent::UpdateContent(content, reset_flag) => {
                     // Update content and apply existing filter
-                    self.set_content(NavigatorContent::Records(content));
+                    if reset_flag{
+                        self.set_content(NavigatorContent::Records(content));
+                    }else {
+                        self.update_content(NavigatorContent::Records(content));
+                    }
                     self.filter_mode = false; // Reset filter mode
                     // self.set_title(title);
                     None

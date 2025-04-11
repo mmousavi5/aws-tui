@@ -107,7 +107,7 @@ impl CloudWatch {
                     ComponentAction::WidgetAction(WidgetAction::ServiceNavigatorEvent(
                         ServiceNavigatorEvent::UpdateContent(vec![
                             "Fetching logs, please wait...".to_string(),
-                        ]),
+                        ], false),
                         WidgetType::QueryResultsNavigator,
                     )),
                     self.component_type.clone(),
@@ -146,7 +146,7 @@ impl CloudWatch {
                         event_sender
                             .send(Event::Tab(TabEvent::ComponentActions(
                                 ComponentAction::WidgetAction(WidgetAction::ServiceNavigatorEvent(
-                                    ServiceNavigatorEvent::UpdateContent(logs),
+                                    ServiceNavigatorEvent::UpdateContent(logs, false),
                                     WidgetType::QueryResultsNavigator,
                                 )),
                                 component_type.clone(),
@@ -167,7 +167,7 @@ impl CloudWatch {
                         event_sender
                             .send(Event::Tab(TabEvent::ComponentActions(
                                 ComponentAction::WidgetAction(WidgetAction::ServiceNavigatorEvent(
-                                    ServiceNavigatorEvent::UpdateContent(vec![err.to_string()]),
+                                    ServiceNavigatorEvent::UpdateContent(vec![err.to_string()], false),
                                     WidgetType::QueryResultsNavigator,
                                 )),
                                 component_type.clone(),
@@ -636,7 +636,7 @@ impl AWSComponent for CloudWatch {
                         event_sender
                             .send(Event::Tab(TabEvent::ComponentActions(
                                 ComponentAction::WidgetAction(WidgetAction::ServiceNavigatorEvent(
-                                    ServiceNavigatorEvent::UpdateContent(log_groups),
+                                    ServiceNavigatorEvent::UpdateContent(log_groups, false),
                                     WidgetType::AWSServiceNavigator,
                                 )),
                                 component_type.clone(),
@@ -661,7 +661,7 @@ impl AWSComponent for CloudWatch {
                                 ComponentAction::WidgetAction(WidgetAction::ServiceNavigatorEvent(
                                     ServiceNavigatorEvent::UpdateContent(vec![format!(
                                         "Error fetching log groups: {}", err
-                                    )]),
+                                    )], false),
                                     WidgetType::AWSServiceNavigator,
                                 )),
                                 component_type.clone(),
