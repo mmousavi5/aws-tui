@@ -25,7 +25,7 @@ pub trait AWSComponent: Send {
     /// Get active state
     fn is_active(&self) -> bool;
 
-    /// Set visibility
+    /// Set visibility``
     fn set_visible(&mut self, visible: bool);
 
     /// Get visibility
@@ -33,9 +33,6 @@ pub trait AWSComponent: Send {
 
     /// Update component data from the backend
     async fn update(&mut self) -> Result<(), Box<dyn std::error::Error>>;
-
-    /// Get current focus state
-    fn get_current_focus(&self) -> ComponentFocus;
 
     /// Reset focus to default state
     fn reset_focus(&mut self);
@@ -48,6 +45,12 @@ pub trait AWSComponent: Send {
 
     /// Get contextual help information for the component
     fn get_help_items(&self) -> Vec<(String, String)>;
+
+    /// Is the component navigable
+    fn allows_focus_continuation(&self) -> bool;
+
+    /// Is the component navigable
+    fn allows_focus_continuation_backward(&self) -> bool;
 }
 
 /// Represents the current input focus within a component

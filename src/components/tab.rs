@@ -3,7 +3,6 @@ use crate::components::cloudwatch::CloudWatch;
 use crate::components::s3::S3Component;
 use crate::services::aws::TabClients;
 use crate::{
-    components::ComponentFocus,
     components::dynamodb::DynamoDB,
     event_managment::event::{
         ComponentAction, ComponentType,
@@ -283,7 +282,7 @@ impl Tab {
                     self.forward_focus_event_to_component(self.active_right_widget);
                 } else {
                     if let Some(widget) = self.right_widgets.get_mut(&self.active_right_widget) {
-                        if widget.get_current_focus() == ComponentFocus::None {
+                        if widget.allows_focus_continuation() {
                             self.current_focus = TabFocus::Left;
                             self.forward_unfocus_event_to_component(self.active_right_widget);
                         } else {
@@ -323,7 +322,7 @@ impl Tab {
             TabAction::PreviousFocus => {
                 if self.current_focus == TabFocus::Right {
                     if let Some(widget) = self.right_widgets.get_mut(&self.active_right_widget) {
-                        if widget.get_current_focus() != ComponentFocus::Navigation {
+                        if widget.allows_focus_continuation_backward() {
                             // Send previous focus to component
                             match self.active_right_widget {
                                 WidgetType::S3 => {

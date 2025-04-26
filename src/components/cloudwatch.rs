@@ -1,4 +1,4 @@
-use crate::components::{AWSComponent, ComponentFocus};
+use crate::components::AWSComponent;
 use crate::event_managment::event::{
     ComponentAction, ComponentType, Event, InputBoxEvent, InputBoxType, ServiceNavigatorEvent,
     TabEvent, WidgetAction, WidgetEventType, WidgetType,
@@ -17,6 +17,20 @@ use ratatui::{
 use std::any::Any;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum CloudWatchFocus {
+    /// Focus on the left navigation area (service list/tables/buckets)
+    Navigation,
+    /// Focus on the input area (search/filter/command box)
+    Input,
+    /// Focus on the time range input box
+    TimeRange,
+    /// Focus on the results display area
+    Results,
+    /// No focus set
+    None,
+}
 
 /// Component for interacting with AWS CloudWatch logs
 pub struct CloudWatch {
@@ -48,11 +62,7 @@ pub struct CloudWatch {
     /// Channel for sending events to the application
     event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
     /// Current focus state within the component
-    current_focus: ComponentFocus,
-    /// Currently selected item (bucket, table, log group, etc.)
-    selected_item: Option<String>,
-    /// Current query string being executed
-    selected_query: Option<String>,
+    current_focus: CloudWatchFocus,
 }
 
 impl CloudWatch {
@@ -88,49 +98,51 @@ impl CloudWatch {
             active: false,
             visible: true,
             event_sender,
-            current_focus: ComponentFocus::Navigation,
-            selected_item: None,
-            selected_query: None,
+            current_focus: CloudWatchFocus::Navigation,
         }
+    }
+
+    fn get_current_focus(&self) -> CloudWatchFocus {
+        self.current_focus
     }
 
     /// Updates active states of all widgets based on current focus
     fn update_widget_states(&mut self) {
         self.navigator
-            .set_active(self.active & (self.current_focus == ComponentFocus::Navigation));
+            .set_active(self.active & (self.current_focus == CloudWatchFocus::Navigation));
         self.input
-            .set_active(self.active & (self.current_focus == ComponentFocus::Input));
+            .set_active(self.active & (self.current_focus == CloudWatchFocus::Input));
         self.results_navigator
-            .set_active(self.active & (self.current_focus == ComponentFocus::Results));
+            .set_active(self.active & (self.current_focus == CloudWatchFocus::Results));
     }
 
     /// Shifts focus to the previous widget in the cyclic order
-    fn focus_previous(&mut self) -> ComponentFocus {
+    fn focus_previous(&mut self) -> CloudWatchFocus {
         self.current_focus = match self.current_focus {
-            ComponentFocus::Navigation => ComponentFocus::None,
-            ComponentFocus::Input => ComponentFocus::Navigation,
-            ComponentFocus::TimeRange => ComponentFocus::Input,
-            ComponentFocus::Results => ComponentFocus::TimeRange,
-            ComponentFocus::None => ComponentFocus::Results,
+            CloudWatchFocus::Navigation => CloudWatchFocus::None,
+            CloudWatchFocus::Input => CloudWatchFocus::Navigation,
+            CloudWatchFocus::TimeRange => CloudWatchFocus::Input,
+            CloudWatchFocus::Results => CloudWatchFocus::TimeRange,
+            CloudWatchFocus::None => CloudWatchFocus::Results,
         };
         self.current_focus
     }
 
     /// Shifts focus to the next widget in the cyclic order
-    fn focus_next(&mut self) -> ComponentFocus {
+    fn focus_next(&mut self) -> CloudWatchFocus {
         self.current_focus = match self.current_focus {
-            ComponentFocus::Navigation => ComponentFocus::Input,
-            ComponentFocus::Input => ComponentFocus::TimeRange,
-            ComponentFocus::TimeRange => ComponentFocus::Results,
-            ComponentFocus::Results => ComponentFocus::None,
-            ComponentFocus::None => ComponentFocus::Navigation,
+            CloudWatchFocus::Navigation => CloudWatchFocus::Input,
+            CloudWatchFocus::Input => CloudWatchFocus::TimeRange,
+            CloudWatchFocus::TimeRange => CloudWatchFocus::Results,
+            CloudWatchFocus::Results => CloudWatchFocus::None,
+            CloudWatchFocus::None => CloudWatchFocus::Navigation,
         };
         self.current_focus
     }
 
     /// Sets focus to the results area (typically the last widget in focus order)
-    fn set_focus_to_last(&mut self) -> ComponentFocus {
-        self.current_focus = ComponentFocus::Results;
+    fn set_focus_to_last(&mut self) -> CloudWatchFocus {
+        self.current_focus = CloudWatchFocus::Results;
         self.current_focus
     }
 
@@ -284,7 +296,7 @@ impl CloudWatch {
         self.results_navigator.set_active(!activate);
 
         if activate {
-            self.current_focus = ComponentFocus::TimeRange;
+            self.current_focus = CloudWatchFocus::TimeRange;
         }
     }
     
@@ -301,17 +313,17 @@ impl CloudWatch {
 
         // Different help items based on current focus
         match self.current_focus {
-            ComponentFocus::Navigation => {
+            CloudWatchFocus::Navigation => {
                 items.push(("Enter".to_string(), "Select log group".to_string()));
                 items.push(("Alt+2".to_string(), "Focus results".to_string()));
                 items.push(("Alt+3".to_string(), "Focus input".to_string()));
             }
-            ComponentFocus::Results => {
+            CloudWatchFocus::Results => {
                 items.push(("Enter".to_string(), "View log details".to_string()));
                 items.push(("Alt+1".to_string(), "Focus log groups".to_string()));
                 items.push(("Alt+3".to_string(), "Focus input".to_string()));
             }
-            ComponentFocus::Input => {
+            CloudWatchFocus::Input => {
                 items.push(("Enter".to_string(), "Search logs".to_string()));
                 items.push(("Alt+1".to_string(), "Focus log groups".to_string()));
                 items.push(("Alt+2".to_string(), "Focus results".to_string()));
@@ -408,34 +420,34 @@ impl AWSComponent for CloudWatch {
             }
             // Alt+number shortcuts to switch focus between areas
             KeyCode::Char('1') if key_event.modifiers == KeyModifiers::ALT => {
-                self.current_focus = ComponentFocus::Navigation;
+                self.current_focus = CloudWatchFocus::Navigation;
                 self.update_widget_states();
             }
             KeyCode::Char('2') if key_event.modifiers == KeyModifiers::ALT => {
-                self.current_focus = ComponentFocus::Input;
+                self.current_focus = CloudWatchFocus::Input;
                 self.update_widget_states();
             }
             KeyCode::Char('3') if key_event.modifiers == KeyModifiers::ALT => {
                 self.update_time_range_focus(true);
             }
             KeyCode::Char('4') if key_event.modifiers == KeyModifiers::ALT => {
-                self.current_focus = ComponentFocus::Results;
+                self.current_focus = CloudWatchFocus::Results;
                 self.update_widget_states();
             }
             KeyCode::Esc => {
-                if self.current_focus != ComponentFocus::Navigation {
-                    self.current_focus = ComponentFocus::Navigation;
+                if self.current_focus != CloudWatchFocus::Navigation {
+                    self.current_focus = CloudWatchFocus::Navigation;
                     self.update_widget_states();
                 }
             }
             _ => {
                 // Forward input to the currently focused widget
                 if let Some(signal) = match self.current_focus {
-                    ComponentFocus::Navigation => self.navigator.handle_input(key_event),
-                    ComponentFocus::Input => self.input.handle_input(key_event),
-                    ComponentFocus::TimeRange => self.time_range_input.handle_input(key_event),
-                    ComponentFocus::Results => self.results_navigator.handle_input(key_event),
-                    ComponentFocus::None => None,
+                    CloudWatchFocus::Navigation => self.navigator.handle_input(key_event),
+                    CloudWatchFocus::Input => self.input.handle_input(key_event),
+                    CloudWatchFocus::TimeRange => self.time_range_input.handle_input(key_event),
+                    CloudWatchFocus::Results => self.results_navigator.handle_input(key_event),
+                    CloudWatchFocus::None => None,
                 } {
                     self.event_sender
                         .send(Event::Tab(TabEvent::ComponentActions(
@@ -480,7 +492,7 @@ impl AWSComponent for CloudWatch {
                     self.set_active(true);
                 }
                 ComponentAction::Unfocused => {
-                    if self.get_current_focus() == ComponentFocus::None {
+                    if self.get_current_focus() == CloudWatchFocus::None {
                         self.reset_focus();
                     }
                     // Set the component as inactive
@@ -515,17 +527,17 @@ impl AWSComponent for CloudWatch {
                 // Cycle focus forward through widgets
                 ComponentAction::NextFocus => {
                     // If we're on TimeRange focus, we need special handling
-                    if self.current_focus == ComponentFocus::TimeRange {
+                    if self.current_focus == CloudWatchFocus::TimeRange {
                         self.update_time_range_focus(false);
-                        self.current_focus = ComponentFocus::Results;
+                        self.current_focus = CloudWatchFocus::Results;
                         self.update_widget_states();
                     } else {
                         let prev_focus = self.current_focus;
                         self.focus_next();
 
                         // If we just moved to TimeRange, activate time range input
-                        if prev_focus != ComponentFocus::TimeRange
-                            && self.current_focus == ComponentFocus::TimeRange
+                        if prev_focus != CloudWatchFocus::TimeRange
+                            && self.current_focus == CloudWatchFocus::TimeRange
                         {
                             self.update_time_range_focus(true);
                         } else {
@@ -536,17 +548,17 @@ impl AWSComponent for CloudWatch {
                 // Cycle focus backward through widgets
                 ComponentAction::PreviousFocus => {
                     // If we're on TimeRange focus, we need special handling
-                    if self.current_focus == ComponentFocus::TimeRange {
+                    if self.current_focus == CloudWatchFocus::TimeRange {
                         self.update_time_range_focus(false);
-                        self.current_focus = ComponentFocus::Input;
+                        self.current_focus = CloudWatchFocus::Input;
                         self.update_widget_states();
                     } else {
                         let prev_focus = self.current_focus;
                         self.focus_previous();
 
                         // If we just moved to TimeRange, activate time range input
-                        if prev_focus != ComponentFocus::TimeRange
-                            && self.current_focus == ComponentFocus::TimeRange
+                        if prev_focus != CloudWatchFocus::TimeRange
+                            && self.current_focus == CloudWatchFocus::TimeRange
                         {
                             self.update_time_range_focus(true);
                         } else {
@@ -774,13 +786,23 @@ impl AWSComponent for CloudWatch {
         Ok(())
     }
 
-    fn get_current_focus(&self) -> ComponentFocus {
-        self.current_focus
+    fn allows_focus_continuation(&self) -> bool {
+        if self.current_focus == CloudWatchFocus::None {
+            return  true;
+        }
+        false
+    }
+
+    fn allows_focus_continuation_backward(&self) -> bool {
+        if self.current_focus != CloudWatchFocus::Navigation {
+            return  true;
+        }
+        false
     }
 
     /// Resets focus to the navigation pane
     fn reset_focus(&mut self) {
-        self.current_focus = ComponentFocus::Navigation;
+        self.current_focus = CloudWatchFocus::Navigation;
         self.update_time_range_focus(false);
         self.update_widget_states();
     }
@@ -794,7 +816,7 @@ impl AWSComponent for CloudWatch {
         self.set_focus_to_last();
 
         // Special handling for TimeRange focus
-        if self.current_focus == ComponentFocus::TimeRange {
+        if self.current_focus == CloudWatchFocus::TimeRange {
             self.update_time_range_focus(true);
         } else {
             self.update_widget_states();
@@ -805,7 +827,7 @@ impl AWSComponent for CloudWatch {
         let mut help_items = vec![];
 
         // Add time range specific help when time range input is focused
-        if self.current_focus == ComponentFocus::TimeRange {
+        if self.current_focus == CloudWatchFocus::TimeRange {
             help_items.push(("Enter".to_string(), "Apply time range".to_string()));
             help_items.push(("Time formats".to_string(), "15m, 1h, 1d, 7d".to_string()));
             help_items.push(("Esc".to_string(), "Return to navigation".to_string()));

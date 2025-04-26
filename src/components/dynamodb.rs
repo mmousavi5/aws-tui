@@ -1,4 +1,4 @@
-use crate::components::{AWSComponent, ComponentFocus};
+use crate::components::{AWSComponent};
 use crate::event_managment::event::{
     ComponentAction, ComponentType, Event, InputBoxEvent, ServiceNavigatorEvent, TabEvent,
     WidgetAction, WidgetEventType, WidgetType, InputBoxType,
@@ -18,6 +18,20 @@ use std::any::Any;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum DynamodbFocus {
+    /// Focus on the left navigation area (service list/tables/buckets)
+    Navigation,
+    /// Focus on the input area (search/filter/command box)
+    Input,
+    /// Focus on the time range input box
+    TimeRange,
+    /// Focus on the results display area
+    Results,
+    /// No focus set
+    None,
+}
+
 /// Component for interacting with AWS DynamoDB
 pub struct DynamoDB {
     /// Component type identifier
@@ -29,7 +43,7 @@ pub struct DynamoDB {
     /// Input box for sort key
     sort_key_input: InputBoxWidget,
     /// Current focus within this component
-    current_sub_focus: ComponentFocus,
+    current_sub_focus: DynamodbFocus,
     
     /// Left navigator widget for service/bucket/table lists
     navigator: ServiceNavigator,
@@ -46,7 +60,7 @@ pub struct DynamoDB {
     /// Channel for sending events to the application
     event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
     /// Current focus state within the component
-    current_focus: ComponentFocus,
+    current_focus: DynamodbFocus,
     /// Currently selected item (bucket, table, log group, etc.)
     selected_item: Option<String>,
     /// Current query string being executed
@@ -67,7 +81,7 @@ impl DynamoDB {
                 "Sort Key (if applicable)",
                 false,
             ),
-            current_sub_focus: ComponentFocus::Input,
+            current_sub_focus: DynamodbFocus::Input,
             
             // Fields moved from AWSComponentBase
             navigator: ServiceNavigator::new(
@@ -85,42 +99,42 @@ impl DynamoDB {
             active: false,
             visible: true,
             event_sender,
-            current_focus: ComponentFocus::Navigation,
+            current_focus: DynamodbFocus::Navigation,
             selected_item: None,
             selected_query: None,
         }
     }
-    
+
     /// Updates active states of all widgets based on current focus
     fn update_widget_states(&mut self) {
         self.navigator
-            .set_active(self.active & (self.current_focus == ComponentFocus::Navigation));
+            .set_active(self.active & (self.current_focus == DynamodbFocus::Navigation));
         self.input
-            .set_active(self.active & (self.current_focus == ComponentFocus::Input));
+            .set_active(self.active & (self.current_focus == DynamodbFocus::Input));
         self.results_navigator
-            .set_active(self.active & (self.current_focus == ComponentFocus::Results));
+            .set_active(self.active & (self.current_focus == DynamodbFocus::Results));
     }
 
     /// Shifts focus to the previous widget in the cyclic order
-    fn focus_previous(&mut self) -> ComponentFocus {
+    fn focus_previous(&mut self) -> DynamodbFocus {
         self.current_focus = match self.current_focus {
-            ComponentFocus::Navigation => ComponentFocus::None,
-            ComponentFocus::Input => ComponentFocus::Navigation,
-            ComponentFocus::TimeRange => ComponentFocus::Input,
-            ComponentFocus::Results => ComponentFocus::TimeRange,
-            ComponentFocus::None => ComponentFocus::Results,
+            DynamodbFocus::Navigation => DynamodbFocus::None,
+            DynamodbFocus::Input => DynamodbFocus::Navigation,
+            DynamodbFocus::TimeRange => DynamodbFocus::Input,
+            DynamodbFocus::Results => DynamodbFocus::TimeRange,
+            DynamodbFocus::None => DynamodbFocus::Results,
         };
         self.current_focus
     }
 
     /// Shifts focus to the next widget in the cyclic order
-    fn focus_next(&mut self) -> ComponentFocus {
+    fn focus_next(&mut self) -> DynamodbFocus {
         self.current_focus = match self.current_focus {
-            ComponentFocus::Navigation => ComponentFocus::Input,
-            ComponentFocus::Input => ComponentFocus::TimeRange,
-            ComponentFocus::TimeRange => ComponentFocus::Results,
-            ComponentFocus::Results => ComponentFocus::None,
-            ComponentFocus::None => ComponentFocus::Navigation,
+            DynamodbFocus::Navigation => DynamodbFocus::Input,
+            DynamodbFocus::Input => DynamodbFocus::TimeRange,
+            DynamodbFocus::TimeRange => DynamodbFocus::Results,
+            DynamodbFocus::Results => DynamodbFocus::None,
+            DynamodbFocus::None => DynamodbFocus::Navigation,
         };
         self.current_focus
     }
@@ -133,7 +147,7 @@ impl DynamoDB {
         self.results_navigator.set_active(!activate);
 
         if activate {
-            self.current_sub_focus = ComponentFocus::TimeRange;
+            self.current_sub_focus = DynamodbFocus::TimeRange;
         }
     }
     
@@ -150,17 +164,17 @@ impl DynamoDB {
 
         // Different help items based on current focus
         match self.current_focus {
-            ComponentFocus::Navigation => {
+            DynamodbFocus::Navigation => {
                 items.push(("Enter".to_string(), "Select table".to_string()));
                 items.push(("Alt+2".to_string(), "Focus query input".to_string()));
                 items.push(("Alt+4".to_string(), "Focus results".to_string()));
             }
-            ComponentFocus::Results => {
+            DynamodbFocus::Results => {
                 items.push(("Enter".to_string(), "View item details".to_string()));
                 items.push(("Alt+1".to_string(), "Focus tables".to_string()));
                 items.push(("Alt+2".to_string(), "Focus query input".to_string()));
             }
-            ComponentFocus::Input => {
+            DynamodbFocus::Input => {
                 items.push(("Enter".to_string(), "Execute query".to_string()));
                 items.push(("Alt+1".to_string(), "Focus tables".to_string()));
                 items.push(("Alt+4".to_string(), "Focus results".to_string()));
@@ -225,15 +239,30 @@ impl AWSComponent for DynamoDB {
 
     /// Sets focus to the last active widget in the component
     fn set_focus_to_last(&mut self) {
-        self.current_focus = ComponentFocus::Results;
+        self.current_focus = DynamodbFocus::Results;
         
         // Special handling for sort key focus
-        if self.current_focus == ComponentFocus::TimeRange {
+        if self.current_focus == DynamodbFocus::TimeRange {
             self.update_sort_key_focus(true);
         } else {
             self.update_sort_key_focus(false);
             self.update_widget_states();
         }
+    }
+
+
+    fn allows_focus_continuation(&self) -> bool {
+        if self.current_focus == DynamodbFocus::None {
+            return  true;
+        }
+        false
+    }
+
+    fn allows_focus_continuation_backward(&self) -> bool {
+        if self.current_focus != DynamodbFocus::Navigation {
+            return  true;
+        }
+        false
     }
 
     /// Handles keyboard input events
@@ -270,27 +299,27 @@ impl AWSComponent for DynamoDB {
             }
             // Alt+number shortcuts to switch focus between areas
             KeyCode::Char('1') if key_event.modifiers == KeyModifiers::ALT => {
-                self.current_focus = ComponentFocus::Navigation;
+                self.current_focus = DynamodbFocus::Navigation;
                 self.update_sort_key_focus(false);
                 self.update_widget_states();
             }
             KeyCode::Char('2') if key_event.modifiers == KeyModifiers::ALT => {
-                self.current_focus = ComponentFocus::Input;
+                self.current_focus = DynamodbFocus::Input;
                 self.update_sort_key_focus(false);
                 self.update_widget_states();
             }
             KeyCode::Char('3') if key_event.modifiers == KeyModifiers::ALT => {
-                self.current_focus = ComponentFocus::Input;
+                self.current_focus = DynamodbFocus::Input;
                 self.update_sort_key_focus(true);
             }
             KeyCode::Char('4') if key_event.modifiers == KeyModifiers::ALT => {
-                self.current_focus = ComponentFocus::Results;
+                self.current_focus = DynamodbFocus::Results;
                 self.update_sort_key_focus(false);
                 self.update_widget_states();
             }
             KeyCode::Esc => {
-                if self.current_focus != ComponentFocus::Navigation {
-                    self.current_focus = ComponentFocus::Navigation;
+                if self.current_focus != DynamodbFocus::Navigation {
+                    self.current_focus = DynamodbFocus::Navigation;
                     self.update_sort_key_focus(false);
                     self.update_widget_states();
                 }
@@ -298,16 +327,16 @@ impl AWSComponent for DynamoDB {
             _ => {
                 // Forward input to the currently focused widget
                 if let Some(signal) = match self.current_focus {
-                    ComponentFocus::Navigation => self.navigator.handle_input(key_event),
-                    ComponentFocus::Input => {
-                        if self.current_sub_focus == ComponentFocus::TimeRange {
+                    DynamodbFocus::Navigation => self.navigator.handle_input(key_event),
+                    DynamodbFocus::Input => {
+                        if self.current_sub_focus == DynamodbFocus::TimeRange {
                             self.sort_key_input.handle_input(key_event)
                         } else {
                             self.input.handle_input(key_event)
                         }
                     },
-                    ComponentFocus::Results => self.results_navigator.handle_input(key_event),
-                    ComponentFocus::None => None,
+                    DynamodbFocus::Results => self.results_navigator.handle_input(key_event),
+                    DynamodbFocus::None => None,
                     _ => None,
                 } {
                     self.event_sender
@@ -372,17 +401,17 @@ impl AWSComponent for DynamoDB {
             // Cycle focus through widgets
             ComponentAction::NextFocus => {
                 // If we're on sort key focus, we need special handling
-                if self.current_focus == ComponentFocus::TimeRange {
+                if self.current_focus == DynamodbFocus::TimeRange {
                     self.update_sort_key_focus(false);
-                    self.current_focus = ComponentFocus::Results;
+                    self.current_focus = DynamodbFocus::Results;
                     self.update_widget_states();
                 } else {
                     let prev_focus = self.current_focus;
                     self.focus_next();
 
                     // If we just moved to TimeRange, activate time range input
-                    if prev_focus != ComponentFocus::TimeRange
-                        && self.current_focus == ComponentFocus::TimeRange
+                    if prev_focus != DynamodbFocus::TimeRange
+                        && self.current_focus == DynamodbFocus::TimeRange
                     {
                         self.update_sort_key_focus(true);
                     } else {
@@ -392,17 +421,17 @@ impl AWSComponent for DynamoDB {
             }
             ComponentAction::PreviousFocus => {
                 // If we're on sort key focus, go back to primary key
-                if self.current_focus == ComponentFocus::TimeRange {
+                if self.current_focus == DynamodbFocus::TimeRange {
                     self.update_sort_key_focus(false);
-                    self.current_focus = ComponentFocus::Input;
+                    self.current_focus = DynamodbFocus::Input;
                     self.update_widget_states();
                 } else {
                     let prev_focus = self.current_focus;
                     self.focus_previous();
                     
                     // If we just moved to TimeRange, activate time range input
-                    if prev_focus != ComponentFocus::TimeRange
-                        && self.current_focus == ComponentFocus::TimeRange
+                    if prev_focus != DynamodbFocus::TimeRange
+                        && self.current_focus == DynamodbFocus::TimeRange
                     {
                         self.update_sort_key_focus(true);
                     } else {
@@ -436,7 +465,7 @@ impl AWSComponent for DynamoDB {
                     }
                 }
                 // Move focus to the results after query
-                self.current_focus = ComponentFocus::Results;
+                self.current_focus = DynamodbFocus::Results;
                 self.update_sort_key_focus(false);
                 self.update_widget_states();
             }
@@ -573,14 +602,10 @@ impl AWSComponent for DynamoDB {
         Ok(())
     }
 
-    fn get_current_focus(&self) -> ComponentFocus {
-        self.current_focus
-    }
-
     /// Resets focus to the navigation pane
     fn reset_focus(&mut self) {
-        self.current_focus = ComponentFocus::Navigation;
-        self.current_sub_focus = ComponentFocus::Input;
+        self.current_focus = DynamodbFocus::Navigation;
+        self.current_sub_focus = DynamodbFocus::Input;
         self.update_sort_key_focus(false);
         self.update_widget_states();
     }
@@ -593,8 +618,8 @@ impl AWSComponent for DynamoDB {
         let mut help_items = self.get_base_help_items();
         
         // Add sort key specific help
-        if self.current_focus == ComponentFocus::Input {
-            if self.current_sub_focus == ComponentFocus::TimeRange {
+        if self.current_focus == DynamodbFocus::Input {
+            if self.current_sub_focus == DynamodbFocus::TimeRange {
                 help_items.push(("Alt+2".to_string(), "Partition Key".to_string()));
             } else {
                 help_items.push(("Alt+3".to_string(), "Sort Key".to_string()));
