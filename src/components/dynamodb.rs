@@ -1,8 +1,7 @@
-use crate::components::aws_base_component::AWSComponentBase;
 use crate::components::{AWSComponent, ComponentFocus};
 use crate::event_managment::event::{
     ComponentAction, ComponentType, Event, InputBoxEvent, ServiceNavigatorEvent, TabEvent,
-    WidgetAction, WidgetEventType, WidgetType,InputBoxType,
+    WidgetAction, WidgetEventType, WidgetType, InputBoxType,
 };
 use ratatui::{
     buffer::Buffer,
@@ -11,8 +10,8 @@ use ratatui::{
 use crate::services::aws::TabClients;
 use crate::services::aws::dynamo_client::DynamoDBClient;
 use crate::widgets::WidgetExt;
-use crate::widgets::popup::PopupContent;
-use crate::widgets::service_navigator::NavigatorContent;
+use crate::widgets::popup::{PopupContent, PopupWidget};
+use crate::widgets::service_navigator::{NavigatorContent, ServiceNavigator};
 use crate::widgets::input_box::InputBoxWidget;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::any::Any;
@@ -23,8 +22,6 @@ use tokio::sync::Mutex;
 pub struct DynamoDB {
     /// Component type identifier
     component_type: ComponentType,
-    /// Common AWS component functionality
-    base: AWSComponentBase,
     /// Client for DynamoDB API interactions
     dynamodb_client: Option<Arc<Mutex<DynamoDBClient>>>,
     /// AWS service client
@@ -33,14 +30,36 @@ pub struct DynamoDB {
     sort_key_input: InputBoxWidget,
     /// Current focus within this component
     current_sub_focus: ComponentFocus,
+    
+    /// Left navigator widget for service/bucket/table lists
+    navigator: ServiceNavigator,
+    /// Input widget for search/filter/query commands
+    input: InputBoxWidget,
+    /// Results area displaying query results or service content
+    results_navigator: ServiceNavigator,
+    /// Popup for displaying details and additional information
+    details_popup: PopupWidget,
+    /// Whether the component is currently active
+    active: bool,
+    /// Whether the component is currently visible
+    visible: bool,
+    /// Channel for sending events to the application
+    event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
+    /// Current focus state within the component
+    current_focus: ComponentFocus,
+    /// Currently selected item (bucket, table, log group, etc.)
+    selected_item: Option<String>,
+    /// Current query string being executed
+    selected_query: Option<String>,
 }
 
 impl DynamoDB {
     /// Creates a new DynamoDB component with the provided event sender
     pub fn new(event_sender: tokio::sync::mpsc::UnboundedSender<Event>) -> Self {
+        let popup_content = PopupContent::Profiles(vec!["No content".to_string()]);
+        
         Self {
             component_type: ComponentType::DynamoDB,
-            base: AWSComponentBase::new(event_sender.clone(), NavigatorContent::Records(vec![])),
             dynamodb_client: None,
             aws_clients: None,
             sort_key_input: InputBoxWidget::new(
@@ -49,25 +68,113 @@ impl DynamoDB {
                 false,
             ),
             current_sub_focus: ComponentFocus::Input,
+            
+            // Fields moved from AWSComponentBase
+            navigator: ServiceNavigator::new(
+                WidgetType::AWSServiceNavigator,
+                false,
+                NavigatorContent::Records(vec![]),
+            ),
+            input: InputBoxWidget::new(InputBoxType::Text, "Query Input", false),
+            results_navigator: ServiceNavigator::new(
+                WidgetType::QueryResultsNavigator,
+                false,
+                NavigatorContent::Records(vec![]),
+            ),
+            details_popup: PopupWidget::new(popup_content, "Details", false, false),
+            active: false,
+            visible: true,
+            event_sender,
+            current_focus: ComponentFocus::Navigation,
+            selected_item: None,
+            selected_query: None,
         }
     }
+    
+    /// Updates active states of all widgets based on current focus
+    fn update_widget_states(&mut self) {
+        self.navigator
+            .set_active(self.active & (self.current_focus == ComponentFocus::Navigation));
+        self.input
+            .set_active(self.active & (self.current_focus == ComponentFocus::Input));
+        self.results_navigator
+            .set_active(self.active & (self.current_focus == ComponentFocus::Results));
+    }
+
+    /// Shifts focus to the previous widget in the cyclic order
+    fn focus_previous(&mut self) -> ComponentFocus {
+        self.current_focus = match self.current_focus {
+            ComponentFocus::Navigation => ComponentFocus::None,
+            ComponentFocus::Input => ComponentFocus::Navigation,
+            ComponentFocus::TimeRange => ComponentFocus::Input,
+            ComponentFocus::Results => ComponentFocus::TimeRange,
+            ComponentFocus::None => ComponentFocus::Results,
+        };
+        self.current_focus
+    }
+
+    /// Shifts focus to the next widget in the cyclic order
+    fn focus_next(&mut self) -> ComponentFocus {
+        self.current_focus = match self.current_focus {
+            ComponentFocus::Navigation => ComponentFocus::Input,
+            ComponentFocus::Input => ComponentFocus::TimeRange,
+            ComponentFocus::TimeRange => ComponentFocus::Results,
+            ComponentFocus::Results => ComponentFocus::None,
+            ComponentFocus::None => ComponentFocus::Navigation,
+        };
+        self.current_focus
+    }
+    
     /// Updates focus for sort key input and other components
     fn update_sort_key_focus(&mut self, activate: bool) {
         self.sort_key_input.set_active(activate);
-        self.base.input.set_active(!activate);
-        self.base.navigator.set_active(!activate);
-        self.base.results_navigator.set_active(!activate);
+        self.input.set_active(!activate);
+        self.navigator.set_active(!activate);
+        self.results_navigator.set_active(!activate);
 
         if activate {
             self.current_sub_focus = ComponentFocus::TimeRange;
         }
+    }
+    
+    /// Returns contextual help items based on current component state
+    fn get_base_help_items(&self) -> Vec<(String, String)> {
+        let mut items = vec![];
+
+        // Check if the popup is visible
+        if self.details_popup.is_visible() {
+            items.push(("Esc".to_string(), "Close details".to_string()));
+            items.push(("PgUp/PgDn".to_string(), "Scroll content".to_string()));
+            return items;
+        }
+
+        // Different help items based on current focus
+        match self.current_focus {
+            ComponentFocus::Navigation => {
+                items.push(("Enter".to_string(), "Select table".to_string()));
+                items.push(("Alt+2".to_string(), "Focus query input".to_string()));
+                items.push(("Alt+4".to_string(), "Focus results".to_string()));
+            }
+            ComponentFocus::Results => {
+                items.push(("Enter".to_string(), "View item details".to_string()));
+                items.push(("Alt+1".to_string(), "Focus tables".to_string()));
+                items.push(("Alt+2".to_string(), "Focus query input".to_string()));
+            }
+            ComponentFocus::Input => {
+                items.push(("Enter".to_string(), "Execute query".to_string()));
+                items.push(("Alt+1".to_string(), "Focus tables".to_string()));
+                items.push(("Alt+4".to_string(), "Focus results".to_string()));
+            }
+            _ => {}
+        }
+        items
     }
 }
 
 #[async_trait::async_trait]
 impl AWSComponent for DynamoDB {
     fn render(&self, area: Rect, buf: &mut Buffer) {
-        if !self.base.visible {
+        if !self.visible {
             return;
         }
 
@@ -99,44 +206,42 @@ impl AWSComponent for DynamoDB {
             .split(right_vertical_split[0]);
 
         // Render components
-        self.base.navigator.render(horizontal_split[0], buf);
+        self.navigator.render(horizontal_split[0], buf);
 
         // Render the partition key input box
-        self.base.input.render(input_row[0], buf);
+        self.input.render(input_row[0], buf);
 
         // Render the sort key input box
         self.sort_key_input.render(input_row[1], buf);
 
         // Render the results navigator
-        self.base.results_navigator.render(right_vertical_split[1], buf);
+        self.results_navigator.render(right_vertical_split[1], buf);
 
         // Render popup if visible
-        if self.base.details_popup.is_visible() {
-            self.base.details_popup.render(area, buf);
+        if self.details_popup.is_visible() {
+            self.details_popup.render(area, buf);
         }
     }
 
     /// Sets focus to the last active widget in the component
     fn set_focus_to_last(&mut self) {
-        self.base.set_focus_to_last();
+        self.current_focus = ComponentFocus::Results;
         
         // Special handling for sort key focus
-        if self.base.current_focus == ComponentFocus::Input && 
-           self.current_sub_focus == ComponentFocus::TimeRange {
+        if self.current_focus == ComponentFocus::TimeRange {
             self.update_sort_key_focus(true);
         } else {
             self.update_sort_key_focus(false);
-            self.base.update_widget_states();
+            self.update_widget_states();
         }
     }
 
     /// Handles keyboard input events
     fn handle_input(&mut self, key_event: KeyEvent) {
         // Special handling for popup details if visible
-        if self.base.details_popup.is_visible() {
-            if let Some(signal) = self.base.details_popup.handle_input(key_event) {
-                self.base
-                    .event_sender
+        if self.details_popup.is_visible() {
+            if let Some(signal) = self.details_popup.handle_input(key_event) {
+                self.event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
                         ComponentAction::WidgetAction(signal),
                         self.component_type.clone(),
@@ -148,8 +253,7 @@ impl AWSComponent for DynamoDB {
 
         match key_event.code {
             KeyCode::Tab => {
-                self.base
-                    .event_sender
+                self.event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
                         ComponentAction::NextFocus,
                         self.component_type.clone(),
@@ -157,8 +261,7 @@ impl AWSComponent for DynamoDB {
                     .unwrap();
             }
             KeyCode::BackTab => {
-                self.base
-                    .event_sender
+                self.event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
                         ComponentAction::PreviousFocus,
                         self.component_type.clone(),
@@ -167,48 +270,47 @@ impl AWSComponent for DynamoDB {
             }
             // Alt+number shortcuts to switch focus between areas
             KeyCode::Char('1') if key_event.modifiers == KeyModifiers::ALT => {
-                self.base.current_focus = ComponentFocus::Navigation;
+                self.current_focus = ComponentFocus::Navigation;
                 self.update_sort_key_focus(false);
-                self.base.update_widget_states();
+                self.update_widget_states();
             }
             KeyCode::Char('2') if key_event.modifiers == KeyModifiers::ALT => {
-                self.base.current_focus = ComponentFocus::Input;
+                self.current_focus = ComponentFocus::Input;
                 self.update_sort_key_focus(false);
-                self.base.update_widget_states();
+                self.update_widget_states();
             }
             KeyCode::Char('3') if key_event.modifiers == KeyModifiers::ALT => {
-                self.base.current_focus = ComponentFocus::Input;
+                self.current_focus = ComponentFocus::Input;
                 self.update_sort_key_focus(true);
             }
             KeyCode::Char('4') if key_event.modifiers == KeyModifiers::ALT => {
-                self.base.current_focus = ComponentFocus::Results;
+                self.current_focus = ComponentFocus::Results;
                 self.update_sort_key_focus(false);
-                self.base.update_widget_states();
+                self.update_widget_states();
             }
             KeyCode::Esc => {
-                if self.base.current_focus != ComponentFocus::Navigation {
-                    self.base.current_focus = ComponentFocus::Navigation;
+                if self.current_focus != ComponentFocus::Navigation {
+                    self.current_focus = ComponentFocus::Navigation;
                     self.update_sort_key_focus(false);
-                    self.base.update_widget_states();
+                    self.update_widget_states();
                 }
             }
             _ => {
                 // Forward input to the currently focused widget
-                if let Some(signal) = match self.base.current_focus {
-                    ComponentFocus::Navigation => self.base.navigator.handle_input(key_event),
+                if let Some(signal) = match self.current_focus {
+                    ComponentFocus::Navigation => self.navigator.handle_input(key_event),
                     ComponentFocus::Input => {
                         if self.current_sub_focus == ComponentFocus::TimeRange {
                             self.sort_key_input.handle_input(key_event)
                         } else {
-                            self.base.input.handle_input(key_event)
+                            self.input.handle_input(key_event)
                         }
                     },
-                    ComponentFocus::Results => self.base.results_navigator.handle_input(key_event),
+                    ComponentFocus::Results => self.results_navigator.handle_input(key_event),
                     ComponentFocus::None => None,
                     _ => None,
                 } {
-                    self.base
-                        .event_sender
+                    self.event_sender
                         .send(Event::Tab(TabEvent::ComponentActions(
                             ComponentAction::WidgetAction(signal),
                             self.component_type.clone(),
@@ -233,13 +335,11 @@ impl AWSComponent for DynamoDB {
                         }
                         Err(err) => {
                             // Handle the error (show error in UI)
-                            self.base
-                                .results_navigator
-                                .set_title(String::from("Error connecting to CloudWatch"));
-                            self.base
-                                .results_navigator
+                            self.results_navigator
+                                .set_title(String::from("Error connecting to DynamoDB"));
+                            self.results_navigator
                                 .set_content(NavigatorContent::Records(vec![format!(
-                                    "Failed to initialize CloudWatch client: {}",
+                                    "Failed to initialize DynamoDB client: {}",
                                     err
                                 )]));
                         }
@@ -257,66 +357,65 @@ impl AWSComponent for DynamoDB {
 
             // Handle selection of a table
             ComponentAction::SetTitle(title) => {
-                self.base.navigator.set_title(title.clone());
-                self.base.selected_item = Some(title);
-                self.base.focus_next();
-                self.base.update_widget_states();
+                self.navigator.set_title(title.clone());
+                self.selected_item = Some(title);
+                self.focus_next();
+                self.update_widget_states();
             }
             // Show item details in a popup
             ComponentAction::PopupDetails(title) => {
-                self.base
-                    .details_popup
+                self.details_popup
                     .set_content(PopupContent::Details(title.clone()));
-                self.base.details_popup.set_visible(true);
-                self.base.details_popup.set_active(true);
+                self.details_popup.set_visible(true);
+                self.details_popup.set_active(true);
             }
             // Cycle focus through widgets
             ComponentAction::NextFocus => {
                 // If we're on sort key focus, we need special handling
-                if self.base.current_focus == ComponentFocus::TimeRange {
+                if self.current_focus == ComponentFocus::TimeRange {
                     self.update_sort_key_focus(false);
-                    self.base.current_focus = ComponentFocus::Results;
-                    self.base.update_widget_states();
+                    self.current_focus = ComponentFocus::Results;
+                    self.update_widget_states();
                 } else {
-                    let prev_focus = self.base.current_focus;
-                    self.base.focus_next();
+                    let prev_focus = self.current_focus;
+                    self.focus_next();
 
                     // If we just moved to TimeRange, activate time range input
                     if prev_focus != ComponentFocus::TimeRange
-                        && self.base.current_focus == ComponentFocus::TimeRange
+                        && self.current_focus == ComponentFocus::TimeRange
                     {
                         self.update_sort_key_focus(true);
                     } else {
-                        self.base.update_widget_states();
+                        self.update_widget_states();
                     }
                 }
             }
             ComponentAction::PreviousFocus => {
                 // If we're on sort key focus, go back to primary key
-                if self.base.current_focus == ComponentFocus::TimeRange {
+                if self.current_focus == ComponentFocus::TimeRange {
                     self.update_sort_key_focus(false);
-                    self.base.current_focus = ComponentFocus::Input;
-                    self.base.update_widget_states();
+                    self.current_focus = ComponentFocus::Input;
+                    self.update_widget_states();
                 } else {
-                    let prev_focus = self.base.current_focus;
-                    self.base.focus_previous();
+                    let prev_focus = self.current_focus;
+                    self.focus_previous();
                     
                     // If we just moved to TimeRange, activate time range input
                     if prev_focus != ComponentFocus::TimeRange
-                        && self.base.current_focus == ComponentFocus::TimeRange
+                        && self.current_focus == ComponentFocus::TimeRange
                     {
                         self.update_sort_key_focus(true);
                     } else {
-                        self.base.update_widget_states();
+                        self.update_widget_states();
                     }
                 }
             }
             ComponentAction::SetQuery(partition_key) => {
-                self.base.results_navigator.set_title(partition_key.clone());
-                self.base.selected_query = Some(partition_key.clone());
+                self.results_navigator.set_title(partition_key.clone());
+                self.selected_query = Some(partition_key.clone());
 
                 if let Some(client) = &self.dynamodb_client {
-                    if let Some(selected_table) = &self.base.selected_item {
+                    if let Some(selected_table) = &self.selected_item {
                         // Get the sort key value if available
                         let sort_key = self.sort_key_input.get_content();
                         
@@ -332,15 +431,14 @@ impl AWSComponent for DynamoDB {
                             .await
                             .unwrap_or_else(|_| vec!["Query error".to_string()]);
 
-                        self.base
-                            .results_navigator
+                        self.results_navigator
                             .set_content(NavigatorContent::Records(content));
                     }
                 }
                 // Move focus to the results after query
-                self.base.current_focus = ComponentFocus::Results;
+                self.current_focus = ComponentFocus::Results;
                 self.update_sort_key_focus(false);
-                self.base.update_widget_states();
+                self.update_widget_states();
             }
             // Handle widget-specific actions
             ComponentAction::WidgetAction(widget_action) => match widget_action {
@@ -348,7 +446,7 @@ impl AWSComponent for DynamoDB {
                 WidgetAction::ServiceNavigatorEvent(ref _aws_navigator_event, widget_type) => {
                     if widget_type == WidgetType::AWSServiceNavigator {
                         if let Some(signal) =
-                            self.base.navigator.process_event(widget_action.clone())
+                            self.navigator.process_event(widget_action.clone())
                         {
                             match signal {
                                 // Handle selection of a table from the navigator
@@ -358,8 +456,7 @@ impl AWSComponent for DynamoDB {
                                     ),
                                     WidgetType::AWSServiceNavigator,
                                 ) => {
-                                    self.base
-                                        .event_sender
+                                    self.event_sender
                                         .send(Event::Tab(TabEvent::ComponentActions(
                                             ComponentAction::SetTitle(title.clone()),
                                             self.component_type.clone(),
@@ -372,7 +469,6 @@ impl AWSComponent for DynamoDB {
                     } else if widget_type == WidgetType::QueryResultsNavigator {
                         // Process events from the query results navigator
                         if let Some(signal) = self
-                            .base
                             .results_navigator
                             .process_event(widget_action.clone())
                         {
@@ -384,8 +480,7 @@ impl AWSComponent for DynamoDB {
                                     ),
                                     WidgetType::QueryResultsNavigator,
                                 ) => {
-                                    self.base
-                                        .event_sender
+                                    self.event_sender
                                         .send(Event::Tab(TabEvent::ComponentActions(
                                             ComponentAction::PopupDetails(title.clone()),
                                             self.component_type.clone(),
@@ -401,12 +496,11 @@ impl AWSComponent for DynamoDB {
                 WidgetAction::InputBoxEvent(ref _input_box_event, ref input_type) => {
                     match input_type {
                         InputBoxType::Text => {
-                            if let Some(signal) = self.base.input.process_event(widget_action.clone()) {
+                            if let Some(signal) = self.input.process_event(widget_action.clone()) {
                                 match signal {
                                     WidgetAction::InputBoxEvent(InputBoxEvent::Written(content), _) => {
                                         // If the Enter key was pressed in the partition key input
-                                        self.base
-                                            .event_sender
+                                        self.event_sender
                                             .send(Event::Tab(TabEvent::ComponentActions(
                                                 ComponentAction::SetQuery(content),
                                                 self.component_type.clone(),
@@ -423,9 +517,8 @@ impl AWSComponent for DynamoDB {
                                     WidgetAction::InputBoxEvent(InputBoxEvent::Written(_), _) => {
                                         // When Enter is pressed in the sort key input, 
                                         // execute the query using the partition key
-                                        if let Some(partition_key) = self.base.input.get_content() {
-                                            self.base
-                                                .event_sender
+                                        if let Some(partition_key) = self.input.get_content() {
+                                            self.event_sender
                                                 .send(Event::Tab(TabEvent::ComponentActions(
                                                     ComponentAction::SetQuery(partition_key),
                                                     self.component_type.clone(),
@@ -442,8 +535,8 @@ impl AWSComponent for DynamoDB {
                 }
                 // Handle popup close events
                 WidgetAction::PopupAction(_) => {
-                    self.base.details_popup.set_visible(false);
-                    self.base.details_popup.set_active(false);
+                    self.details_popup.set_visible(false);
+                    self.details_popup.set_active(false);
                 }
                 _ => {}
             },
@@ -453,20 +546,20 @@ impl AWSComponent for DynamoDB {
 
     /// Sets the active state of this component
     fn set_active(&mut self, active: bool) {
-        self.base.active = active;
-        self.base.update_widget_states();
+        self.active = active;
+        self.update_widget_states();
     }
 
     fn is_active(&self) -> bool {
-        self.base.active
+        self.active
     }
 
     fn set_visible(&mut self, visible: bool) {
-        self.base.visible = visible;
+        self.visible = visible;
     }
 
     fn is_visible(&self) -> bool {
-        self.base.visible
+        self.visible
     }
 
     /// Refreshes the list of DynamoDB tables from AWS
@@ -474,23 +567,22 @@ impl AWSComponent for DynamoDB {
         if let Some(client) = &self.dynamodb_client {
             let client = client.lock().await;
             let tables = client.list_tables().await?;
-            self.base
-                .navigator
+            self.navigator
                 .set_content(NavigatorContent::Records(tables));
         }
         Ok(())
     }
 
     fn get_current_focus(&self) -> ComponentFocus {
-        self.base.current_focus
+        self.current_focus
     }
 
     /// Resets focus to the navigation pane
     fn reset_focus(&mut self) {
-        self.base.current_focus = ComponentFocus::Navigation;
+        self.current_focus = ComponentFocus::Navigation;
         self.current_sub_focus = ComponentFocus::Input;
         self.update_sort_key_focus(false);
-        self.base.update_widget_states();
+        self.update_widget_states();
     }
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
@@ -498,10 +590,10 @@ impl AWSComponent for DynamoDB {
     }
 
     fn get_help_items(&self) -> Vec<(String, String)> {
-        let mut help_items = self.base.get_help_items();
+        let mut help_items = self.get_base_help_items();
         
         // Add sort key specific help
-        if self.base.current_focus == ComponentFocus::Input {
+        if self.current_focus == ComponentFocus::Input {
             if self.current_sub_focus == ComponentFocus::TimeRange {
                 help_items.push(("Alt+2".to_string(), "Partition Key".to_string()));
             } else {

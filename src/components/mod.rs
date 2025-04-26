@@ -1,4 +1,3 @@
-pub(crate) mod aws_base_component;
 pub(crate) mod cloudwatch;
 pub(crate) mod dynamodb;
 pub(crate) mod s3;

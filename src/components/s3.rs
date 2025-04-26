@@ -1,14 +1,14 @@
-use crate::components::aws_base_component::AWSComponentBase;
 use crate::components::{AWSComponent, ComponentFocus};
 use crate::event_managment::event::{
     ComponentAction, ComponentType, Event, InputBoxEvent, ServiceNavigatorEvent, TabEvent,
-    WidgetAction, WidgetEventType, WidgetType,
+    WidgetAction, WidgetEventType, WidgetType, InputBoxType,
 };
 use crate::services::aws::TabClients;
 use crate::services::aws::s3_client::S3Client;
 use crate::widgets::WidgetExt;
-use crate::widgets::popup::PopupContent;
-use crate::widgets::service_navigator::NavigatorContent;
+use crate::widgets::popup::{PopupContent, PopupWidget};
+use crate::widgets::service_navigator::{NavigatorContent, ServiceNavigator};
+use crate::widgets::input_box::InputBoxWidget;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     buffer::Buffer,
@@ -22,8 +22,26 @@ use tokio::sync::Mutex;
 pub struct S3Component {
     /// Component type identifier
     component_type: ComponentType,
-    /// Common AWS component functionality
-    base: AWSComponentBase,
+    /// Left navigator widget for service/bucket/table lists
+    navigator: ServiceNavigator,
+    /// Input widget for search/filter/query commands
+    input: InputBoxWidget,
+    /// Results area displaying query results or service content
+    results_navigator: ServiceNavigator,
+    /// Popup for displaying details and additional information
+    details_popup: PopupWidget,
+    /// Whether the component is currently active
+    active: bool,
+    /// Whether the component is currently visible
+    visible: bool,
+    /// Channel for sending events to the application
+    event_sender: tokio::sync::mpsc::UnboundedSender<Event>,
+    /// Current focus state within the component
+    current_focus: ComponentFocus,
+    /// Currently selected item (bucket, table, log group, etc.)
+    selected_item: Option<String>,
+    /// Current query string being executed
+    selected_query: Option<String>,
     /// Client for S3 API interactions
     s3_client: Option<Arc<Mutex<S3Client>>>,
     /// Current path within the selected bucket
@@ -37,9 +55,28 @@ pub struct S3Component {
 impl S3Component {
     /// Creates a new S3 component with the provided event sender
     pub fn new(event_sender: tokio::sync::mpsc::UnboundedSender<Event>) -> Self {
+        let popup_content = PopupContent::Profiles(vec!["No content".to_string()]);
+
         Self {
             component_type: ComponentType::DynamoDB,
-            base: AWSComponentBase::new(event_sender.clone(), NavigatorContent::Records(vec![])),
+            navigator: ServiceNavigator::new(
+                crate::event_managment::event::WidgetType::AWSServiceNavigator,
+                false,
+                NavigatorContent::Records(vec![]),
+            ),
+            input: InputBoxWidget::new(InputBoxType::Text, "Query Input", false),
+            results_navigator: ServiceNavigator::new(
+                crate::event_managment::event::WidgetType::QueryResultsNavigator,
+                false,
+                NavigatorContent::Records(vec![]),
+            ),
+            details_popup: PopupWidget::new(popup_content, "Details", false, false),
+            active: false,
+            visible: true,
+            event_sender,
+            current_focus: ComponentFocus::Navigation,
+            selected_item: None,
+            selected_query: None,
             s3_client: None,
             current_path: String::new(),
             selected_bucket: None,
@@ -47,12 +84,45 @@ impl S3Component {
         }
     }
 
+    /// Updates active states of all widgets based on current focus
+    fn update_widget_states(&mut self) {
+        self.navigator
+            .set_active(self.active & (self.current_focus == ComponentFocus::Navigation));
+        self.input
+            .set_active(self.active & (self.current_focus == ComponentFocus::Input));
+        self.results_navigator
+            .set_active(self.active & (self.current_focus == ComponentFocus::Results));
+    }
+
+    /// Shifts focus to the previous widget in the cyclic order
+    fn focus_previous(&mut self) -> ComponentFocus {
+        self.current_focus = match self.current_focus {
+            ComponentFocus::Navigation => ComponentFocus::None,
+            ComponentFocus::Input => ComponentFocus::Navigation,
+            ComponentFocus::TimeRange => ComponentFocus::Input,
+            ComponentFocus::Results => ComponentFocus::TimeRange,
+            ComponentFocus::None => ComponentFocus::Results,
+        };
+        self.current_focus
+    }
+
+    /// Shifts focus to the next widget in the cyclic order
+    fn focus_next(&mut self) -> ComponentFocus {
+        self.current_focus = match self.current_focus {
+            ComponentFocus::Navigation => ComponentFocus::Input,
+            ComponentFocus::Input => ComponentFocus::TimeRange,
+            ComponentFocus::TimeRange => ComponentFocus::Results,
+            ComponentFocus::Results => ComponentFocus::None,
+            ComponentFocus::None => ComponentFocus::Navigation,
+        };
+        self.current_focus
+    }
+
     /// Handles the selection of a bucket and fetches its contents
     async fn handle_bucket_selection(&mut self, bucket_name: String) {
         self.selected_bucket = Some(bucket_name.clone());
         self.current_path = String::new();
-        self.base
-            .navigator
+        self.navigator
             .set_title(format!("Bucket: {}", bucket_name));
 
         if let Some(client) = &self.s3_client {
@@ -63,11 +133,9 @@ impl S3Component {
                 .await
                 .unwrap_or_else(|_| vec!["Error listing objects".to_string()]);
 
-            self.base
-                .results_navigator
+            self.results_navigator
                 .set_title(String::from("Objects"));
-            self.base
-                .results_navigator
+            self.results_navigator
                 .set_content(NavigatorContent::Records(objects));
         }
     }
@@ -92,11 +160,9 @@ impl S3Component {
                     .await
                     .unwrap_or_else(|_| vec!["Error listing objects".to_string()]);
 
-                self.base
-                    .results_navigator
+                self.results_navigator
                     .set_title(format!("Path: {}", full_path));
-                self.base
-                    .results_navigator
+                self.results_navigator
                     .set_content(NavigatorContent::Records(objects));
             }
         }
@@ -114,8 +180,7 @@ impl S3Component {
 
             // Send event to update objects list with new path
             if let Some(bucket) = &self.selected_bucket {
-                self.base
-                    .event_sender
+                self.event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
                         ComponentAction::LoadPath(bucket.clone(), self.current_path.clone()),
                         self.component_type.clone(),
@@ -124,12 +189,46 @@ impl S3Component {
             }
         }
     }
+    
+    /// Returns contextual help items based on current component state
+    fn get_base_help_items(&self) -> Vec<(String, String)> {
+        let mut items = vec![];
+
+        // Check if the popup is visible
+        if self.details_popup.is_visible() {
+            items.push(("Esc".to_string(), "Close details".to_string()));
+            items.push(("PgUp/PgDn".to_string(), "Scroll content".to_string()));
+            return items;
+        }
+
+        // Different help items based on current focus
+        match self.current_focus {
+            ComponentFocus::Navigation => {
+                items.push(("Enter".to_string(), "Select bucket".to_string()));
+                items.push(("Alt+2".to_string(), "Focus results".to_string()));
+                items.push(("Alt+3".to_string(), "Focus input".to_string()));
+            }
+            ComponentFocus::Results => {
+                items.push(("Enter".to_string(), "View object details".to_string()));
+                items.push(("Backspace".to_string(), "Navigate up".to_string()));
+                items.push(("Alt+1".to_string(), "Focus buckets".to_string()));
+                items.push(("Alt+3".to_string(), "Focus input".to_string()));
+            }
+            ComponentFocus::Input => {
+                items.push(("Enter".to_string(), "Search objects".to_string()));
+                items.push(("Alt+1".to_string(), "Focus buckets".to_string()));
+                items.push(("Alt+2".to_string(), "Focus results".to_string()));
+            }
+            _ => {}
+        }
+        items
+    }
 }
 
 #[async_trait::async_trait]
 impl AWSComponent for S3Component {
     fn render(&self, area: Rect, buf: &mut Buffer) {
-        if !self.base.visible {
+        if !self.visible {
             return;
         }
 
@@ -152,24 +251,22 @@ impl AWSComponent for S3Component {
             .split(horizontal_split[1]);
 
         // Render components
-        self.base.navigator.render(horizontal_split[0], buf);
-        self.base
-            .results_navigator
+        self.navigator.render(horizontal_split[0], buf);
+        self.results_navigator
             .render(right_vertical_split[1], buf);
-        self.base.input.render(right_vertical_split[0], buf);
+        self.input.render(right_vertical_split[0], buf);
 
-        if self.base.details_popup.is_visible() {
-            self.base.details_popup.render(area, buf);
+        if self.details_popup.is_visible() {
+            self.details_popup.render(area, buf);
         }
     }
 
     /// Handles keyboard input for the S3 component
     fn handle_input(&mut self, key_event: KeyEvent) {
         // Special handling for popup details if visible
-        if self.base.details_popup.is_visible() {
-            if let Some(signal) = self.base.details_popup.handle_input(key_event) {
-                self.base
-                    .event_sender
+        if self.details_popup.is_visible() {
+            if let Some(signal) = self.details_popup.handle_input(key_event) {
+                self.event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
                         ComponentAction::WidgetAction(signal),
                         self.component_type.clone(),
@@ -181,8 +278,7 @@ impl AWSComponent for S3Component {
 
         match key_event.code {
             KeyCode::Tab => {
-                self.base
-                    .event_sender
+                self.event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
                         ComponentAction::NextFocus,
                         self.component_type.clone(),
@@ -190,8 +286,7 @@ impl AWSComponent for S3Component {
                     .unwrap();
             }
             KeyCode::BackTab => {
-                self.base
-                    .event_sender
+                self.event_sender
                     .send(Event::Tab(TabEvent::ComponentActions(
                         ComponentAction::PreviousFocus,
                         self.component_type.clone(),
@@ -200,9 +295,8 @@ impl AWSComponent for S3Component {
             }
             KeyCode::Backspace => {
                 // Navigate up one directory level
-                if self.base.current_focus == ComponentFocus::Results {
-                    self.base
-                        .event_sender
+                if self.current_focus == ComponentFocus::Results {
+                    self.event_sender
                         .send(Event::Tab(TabEvent::ComponentActions(
                             ComponentAction::NavigateUp,
                             self.component_type.clone(),
@@ -212,34 +306,33 @@ impl AWSComponent for S3Component {
             }
             // Alt+number shortcuts to switch focus between areas
             KeyCode::Char('1') if key_event.modifiers == KeyModifiers::ALT => {
-                self.base.current_focus = ComponentFocus::Navigation;
-                self.base.update_widget_states();
+                self.current_focus = ComponentFocus::Navigation;
+                self.update_widget_states();
             }
             KeyCode::Char('2') if key_event.modifiers == KeyModifiers::ALT => {
-                self.base.current_focus = ComponentFocus::Results;
-                self.base.update_widget_states();
+                self.current_focus = ComponentFocus::Results;
+                self.update_widget_states();
             }
             KeyCode::Char('3') if key_event.modifiers == KeyModifiers::ALT => {
-                self.base.current_focus = ComponentFocus::Input;
-                self.base.update_widget_states();
+                self.current_focus = ComponentFocus::Input;
+                self.update_widget_states();
             }
             KeyCode::Esc => {
-                if self.base.current_focus != ComponentFocus::Navigation {
-                    self.base.current_focus = ComponentFocus::Navigation;
-                    self.base.update_widget_states();
+                if self.current_focus != ComponentFocus::Navigation {
+                    self.current_focus = ComponentFocus::Navigation;
+                    self.update_widget_states();
                 }
             }
             _ => {
                 // Forward input to the currently focused widget
-                if let Some(signal) = match self.base.current_focus {
-                    ComponentFocus::Navigation => self.base.navigator.handle_input(key_event),
-                    ComponentFocus::Input => self.base.input.handle_input(key_event),
-                    ComponentFocus::Results => self.base.results_navigator.handle_input(key_event),
+                if let Some(signal) = match self.current_focus {
+                    ComponentFocus::Navigation => self.navigator.handle_input(key_event),
+                    ComponentFocus::Input => self.input.handle_input(key_event),
+                    ComponentFocus::Results => self.results_navigator.handle_input(key_event),
                     ComponentFocus::None => None,
                     _ => None,
                 } {
-                    self.base
-                        .event_sender
+                    self.event_sender
                         .send(Event::Tab(TabEvent::ComponentActions(
                             ComponentAction::WidgetAction(signal),
                             self.component_type.clone(),
@@ -268,11 +361,9 @@ impl AWSComponent for S3Component {
                             }
                             Err(err) => {
                                 // Handle the error (show error in UI)
-                                self.base
-                                    .results_navigator
+                                self.results_navigator
                                     .set_title(String::from("Error connecting to CloudWatch"));
-                                self.base
-                                    .results_navigator
+                                self.results_navigator
                                     .set_content(NavigatorContent::Records(vec![format!(
                                         "Failed to initialize CloudWatch client: {}",
                                         err
@@ -316,12 +407,11 @@ impl AWSComponent for S3Component {
                             .await
                             .unwrap_or_else(|_| vec!["Error listing objects".to_string()]);
 
-                        self.base.results_navigator.set_title(format!(
+                        self.results_navigator.set_title(format!(
                             "Path: {}",
                             if path.is_empty() { "/" } else { &path }
                         ));
-                        self.base
-                            .results_navigator
+                        self.results_navigator
                             .set_content(NavigatorContent::Records(objects));
                     }
                 }
@@ -342,38 +432,37 @@ impl AWSComponent for S3Component {
                             .await
                         {
                             Ok(details) => {
-                                self.base
-                                    .details_popup
+                                self.details_popup
                                     .set_content(PopupContent::Details(details));
-                                self.base.details_popup.set_visible(true);
-                                self.base.details_popup.set_active(true);
+                                self.details_popup.set_visible(true);
+                                self.details_popup.set_active(true);
                             }
                             Err(_) => {
-                                self.base.details_popup.set_content(PopupContent::Details(
+                                self.details_popup.set_content(PopupContent::Details(
                                     "Error fetching object details".to_string(),
                                 ));
-                                self.base.details_popup.set_visible(true);
-                                self.base.details_popup.set_active(true);
+                                self.details_popup.set_visible(true);
+                                self.details_popup.set_active(true);
                             }
                         }
                     }
                 }
                 // Cycle focus forward through widgets
                 ComponentAction::NextFocus => {
-                    self.base.focus_next();
-                    self.base.update_widget_states();
+                    self.focus_next();
+                    self.update_widget_states();
                 }
                 // Cycle focus backward through widgets
                 ComponentAction::PreviousFocus => {
-                    self.base.focus_previous();
-                    self.base.update_widget_states();
+                    self.focus_previous();
+                    self.update_widget_states();
                 }
                 // Process events from child widgets
                 ComponentAction::WidgetAction(widget_action) => match widget_action {
                     WidgetAction::ServiceNavigatorEvent(ref _aws_navigator_event, widget_type) => {
                         if widget_type == WidgetType::AWSServiceNavigator {
                             if let Some(signal) =
-                                self.base.navigator.process_event(widget_action.clone())
+                                self.navigator.process_event(widget_action.clone())
                             {
                                 match signal {
                                     // User selected a bucket from the navigator
@@ -383,8 +472,7 @@ impl AWSComponent for S3Component {
                                         ),
                                         WidgetType::AWSServiceNavigator,
                                     ) => {
-                                        self.base
-                                            .event_sender
+                                        self.event_sender
                                             .send(Event::Tab(TabEvent::ComponentActions(
                                                 ComponentAction::SelectBucket(bucket),
                                                 self.component_type.clone(),
@@ -396,7 +484,6 @@ impl AWSComponent for S3Component {
                             }
                         } else if widget_type == WidgetType::QueryResultsNavigator {
                             if let Some(signal) = self
-                                .base
                                 .results_navigator
                                 .process_event(widget_action.clone())
                             {
@@ -412,8 +499,7 @@ impl AWSComponent for S3Component {
                                         if path.ends_with('/') {
                                             let folder_name =
                                                 path.trim_end_matches('/').to_string();
-                                            self.base
-                                                .event_sender
+                                            self.event_sender
                                                 .send(Event::Tab(TabEvent::ComponentActions(
                                                     ComponentAction::NavigateFolder(folder_name),
                                                     self.component_type.clone(),
@@ -421,8 +507,7 @@ impl AWSComponent for S3Component {
                                                 .unwrap();
                                         } else {
                                             // Show object details in popup
-                                            self.base
-                                                .event_sender
+                                            self.event_sender
                                                 .send(Event::Tab(TabEvent::ComponentActions(
                                                     ComponentAction::PopupDetails(path),
                                                     self.component_type.clone(),
@@ -436,7 +521,7 @@ impl AWSComponent for S3Component {
                         }
                     }
                     WidgetAction::InputBoxEvent(ref _input_box_event, _) => {
-                        if let Some(signal) = self.base.input.process_event(widget_action) {
+                        if let Some(signal) = self.input.process_event(widget_action) {
                             if let WidgetAction::InputBoxEvent(InputBoxEvent::Written(content), _) =
                                 signal
                             {
@@ -448,8 +533,7 @@ impl AWSComponent for S3Component {
                                         format!("{}/{}", self.current_path, content)
                                     };
 
-                                    self.base
-                                        .event_sender
+                                    self.event_sender
                                         .send(Event::Tab(TabEvent::ComponentActions(
                                             ComponentAction::LoadPath(bucket.clone(), search_path),
                                             self.component_type.clone(),
@@ -461,8 +545,8 @@ impl AWSComponent for S3Component {
                     }
                     // Close popup when exit event received
                     WidgetAction::PopupAction(_) => {
-                        self.base.details_popup.set_visible(false);
-                        self.base.details_popup.set_active(false);
+                        self.details_popup.set_visible(false);
+                        self.details_popup.set_active(false);
                     }
                     _ => {}
                 },
@@ -473,20 +557,20 @@ impl AWSComponent for S3Component {
 
     /// Sets the active state of this component
     fn set_active(&mut self, active: bool) {
-        self.base.active = active;
-        self.base.update_widget_states();
+        self.active = active;
+        self.update_widget_states();
     }
 
     fn is_active(&self) -> bool {
-        self.base.active
+        self.active
     }
 
     fn set_visible(&mut self, visible: bool) {
-        self.base.visible = visible;
+        self.visible = visible;
     }
 
     fn is_visible(&self) -> bool {
-        self.base.visible
+        self.visible
     }
 
     /// Fetches and displays the list of S3 buckets
@@ -494,28 +578,25 @@ impl AWSComponent for S3Component {
         if let Some(client) = &self.s3_client {
             let client = client.lock().await;
             let buckets = client.list_buckets().await?;
-            self.base
-                .navigator
+            self.navigator
                 .set_content(NavigatorContent::Records(buckets));
 
             // Reset results area
-            self.base
-                .results_navigator
+            self.results_navigator
                 .set_content(NavigatorContent::Records(vec![]));
-            self.base
-                .results_navigator
+            self.results_navigator
                 .set_title(String::from("Select a bucket"));
         }
         Ok(())
     }
 
     fn get_current_focus(&self) -> ComponentFocus {
-        self.base.current_focus
+        self.current_focus
     }
 
     fn reset_focus(&mut self) {
-        self.base.current_focus = ComponentFocus::Navigation;
-        self.base.update_widget_states();
+        self.current_focus = ComponentFocus::Navigation;
+        self.update_widget_states();
     }
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
@@ -523,12 +604,12 @@ impl AWSComponent for S3Component {
     }
 
     fn set_focus_to_last(&mut self) {
-        self.base.set_focus_to_last();
-        self.base.update_widget_states();
+        self.current_focus = ComponentFocus::Results;
+        self.update_widget_states();
     }
 
     fn get_help_items(&self) -> Vec<(String, String)> {
-        // Return help items based on the base component's state
-        self.base.get_help_items()
+        // Return help items based on the component's state
+        self.get_base_help_items()
     }
 }
